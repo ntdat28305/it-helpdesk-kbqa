@@ -1,0 +1,23 @@
+@"
+# Environment
+.env
+venv/
+
+# Data — không push raw data
+data/raw/
+data/processed/
+data/checkpoint.txt
+data/discovered_urls.json
+
+# Logs
+logs/
+
+# Models
+models/
+
+# Cache
+data/raw/.cache/
+__pycache__/
+*.pyc
+*.egg-info/
+"@ | Out-File -Encoding utf8 .gitignore
