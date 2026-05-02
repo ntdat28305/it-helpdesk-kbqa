@@ -1,0 +1,22 @@
+base_url: "https://learn.microsoft.com/en-us/troubleshoot"
+
+product_sections:
+  - name: "windows"
+    url_path: "/windows"
+    priority: 1
+  - name: "azure"
+    url_path: "/azure"
+    priority: 2
+
+request_delay_min: 1.5
+request_delay_max: 3.0
+max_retries: 3
+max_articles_per_section: 500
+use_cache: true
+cache_dir: "data/raw/.cache"
+raw_output_dir: "data/raw"
+processed_output_dir: "data/processed"
+chunk_size_tokens: 512
+chunk_overlap_tokens: 128
+log_level: "INFO"
+log_file: "logs/scraper.log"
