@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+.env
+data/raw/
+data/processed/
+data/splits/
+data/raw/.cache/
+logs/
+*.log
+.git/
