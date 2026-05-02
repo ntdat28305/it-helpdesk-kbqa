@@ -15,7 +15,6 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from groq import Groq
-from sympy import limit
 
 load_dotenv()
 
@@ -28,18 +27,23 @@ Article title: {title}
 Article content: {text}
 
 Requirements:
-- Question must be something an IT helpdesk user would actually ask
-- Answer must be specific and based on the article content
+- Question must sound like a real user complaint, NOT a technical query
+- Use everyday language, NOT technical terms from the article
+- Do NOT copy phrases directly from the article title or content
+- Examples of good questions:
+  * "My computer keeps crashing after the latest update, what should I do?"
+  * "I can't log into my work account this morning"
+  * "The printer stopped working suddenly"
+- Answer must be specific, actionable, based on the article
 - Answer should be 1-3 sentences maximum
 
-Return JSON only:
+Return JSON only, no explanation:
 {{
   "question": "...",
   "answer": "...",
   "article_id": "{article_id}",
   "category": "{category}"
 }}"""
-
 
 def generate_qa(client: Groq, article: dict) -> dict | None:
     metadata = article.get("metadata", {})
