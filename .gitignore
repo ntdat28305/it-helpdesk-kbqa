@@ -1,4 +1,3 @@
-@"
 # Environment
 .env
 venv/
@@ -8,16 +7,15 @@ data/raw/
 data/processed/
 data/checkpoint.txt
 data/discovered_urls.json
+data/raw/.cache/
 
 # Logs
 logs/
 
-# Models
-models/
-
 # Cache
-data/raw/.cache/
 __pycache__/
 *.pyc
 *.egg-info/
-"@ | Out-File -Encoding utf8 .gitignore
+
+# KHÔNG ignore models — cần cho deployment
+# models/
