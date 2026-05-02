@@ -6,12 +6,12 @@ Chạy (cần FastAPI đang chạy ở port 8000):
     streamlit run src/ui/app.py
 """
 from __future__ import annotations
-
+import os
 import uuid
 import requests
 import streamlit as st
 
-API_URL = "http://localhost:8000"
+API_URL = os.environ.get("API_URL", "http://localhost:8000")
 
 # ── Page config ───────────────────────────────────────────────
 st.set_page_config(
