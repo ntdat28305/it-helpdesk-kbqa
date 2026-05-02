@@ -1,0 +1,302 @@
+[
+  {
+    "question": "Why does the iOS device show 'iOS device is currently busy' error when deploying a device profile?",
+    "answer": "This issue occurs because the iOS device is busy and can't complete evaluation or enforcement of the profile, typically when the device has been powered on but not unlocked, or when a device is currently installing an app or iOS update.",
+    "article_id": "2016341112-ios-device-is-currently-busy",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What is the reason behind the 'Unable to add attachment due to IO error' message on an Android Enterprise work profile enrolled device?",
+    "answer": "This occurs because Android requires an additional application in the workspace to open photos.",
+    "article_id": "android-enterprise-enrolled-devices-fails-attaching-photo",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What is the possible cause of error code 0xC7D14FB5 when installing an Android app in Intune?",
+    "answer": "The possible cause of this error is a bad APK file that cannot be installed onto the device, or Google Play Protect blocking the install of the app.",
+    "article_id": "app-install-error-codes",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What should users do if they receive the 'App installation failed' error after an Android APK app is updated in the Intune portal?",
+    "answer": "Users should reinstall the app from the Company Portal to their devices to fix the issue.",
+    "article_id": "app-installation-failed-error",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why does the Intune enrollment process not start automatically on Apple ADE devices?",
+    "answer": "This issue occurs if the enrollment profile is created before the ADE token is uploaded to Intune or if there's no MDM profile assigned to the device in Intune.",
+    "article_id": "apple-dep-device-fails-auto-enrollment",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "If we assign a device restrictions profile with password settings to Android Enterprise fully managed devices in Intune after they are enrolled, what happens to the password settings deployment?",
+    "answer": "The password settings deployment will report as failed until you manually set a password that meets the requirements.",
+    "article_id": "assign-password-setting-android-fully-managed",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What tool can I use to troubleshoot common Microsoft Entra device registration issues?",
+    "answer": "You can use the Device Registration Troubleshooter Tool to troubleshoot common device registration issues.",
+    "article_id": "azure-ad-device-registration-autopilot",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why is my BitLocker-encrypted Windows 10 device showing as Not compliant in Intune?",
+    "answer": "The issue occurs when encryption isn't finished, which can take a long time based on factors such as disk size, number of files, and BitLocker settings.",
+    "article_id": "bitlocker-encrypted-device-not-compliant",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why can't I assign SCEP certificates to devices in Intune after renewing an expired certificate?",
+    "answer": "This issue occurs because the new certificate can't be assigned after renewal, and the NDESPlugin.log file stops at 'Sending request to certificate registration point'.",
+    "article_id": "cannot-assign-scep-certificates",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why can't I delete a Windows Autopilot deployment profile in Intune?",
+    "answer": "You can't delete the profile because it's still assigned to one or more groups in Microsoft Entra ID, or because a group that was assigned to the profile was deleted before it was removed from the Included groups of the deployment profile.",
+    "article_id": "cannot-delete-autopilot-deployment-profile",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why do apps not install and shell scripts not run on macOS 11.2.x devices?",
+    "answer": "Apps can't be downloaded and installed due to 'Install Pending' status, and shell scripts don't run because the Microsoft Intune management agent can't be installed successfully.",
+    "article_id": "cannot-install-macos-apps-and-run-shell-scripts",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why can't my Windows 10 device sync with Intune after enrollment?",
+    "answer": "This issue occurs if the Device Management Wireless Application Protocol (dmwappushservice) service is disabled on your device.",
+    "article_id": "cannot-sync-windows-10-devices",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why can't Intune uninstall apps that are installed from the Apple App Store?",
+    "answer": "This behavior is by design, as Intune can only uninstall apps that are deployed through the mobile device management (MDM) channel.",
+    "article_id": "cannot-uninstall-apple-app-store-apps",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What is the cause of the issue where you can't update enrollment when enrolling devices in Intune?",
+    "answer": "The cause of this issue is that the devices you are trying to enroll have an outdated version of the Company Portal.",
+    "article_id": "cannot-update-enrollment",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why am I seeing HTTP 500 errors on the CertificateRegistrationSvc verify request in Intune?",
+    "answer": "HTTP 500 errors on the CertificateRegistrationSvc verify request in Intune are typically caused by issues with the Simple Certificate Enrollment Protocol (SCEP) certificate profile configuration or the Microsoft Intune NDES Connector.",
+    "article_id": "certificateregistrationsvc-verify-request-error",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What are the minimum Android version requirements for setting up a work profile on a BYOD device?",
+    "answer": "Android 5.1 and later versions are required for setting up an Android Enterprise work profile on a BYOD device.",
+    "article_id": "configure-android-enterprise-devices-intune",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What is the error message I'll see when enrolling an Apple Automated Device Enrollment (ADE) device?",
+    "answer": "You'll receive an error message that resembles 'XPC_TYPE_ERROR Connection invalid' when trying to enroll an Apple ADE device.",
+    "article_id": "dep-enrollment-xpc-type-error",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What is the purpose of deploying a custom OMA-URI profile that uses a Windows Configuration Service Provider (CSP) in Intune?",
+    "answer": "Deploying a custom OMA-URI profile that uses a CSP is the answer when not all settings are available within the Microsoft Intune admin center, allowing for the configuration of additional settings on a Windows device.",
+    "article_id": "deploy-oma-uris-to-target-csp-via-intune",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What is the advantage of deploying a Win32 application from Intune?",
+    "answer": "Deploying a Win32 app from Intune allows you to deploy .exe files by converting them to the .intunewin format, use detection logic to ensure the app is installed only if it meets specific criteria, and create rules for app applicability, download, and installation.",
+    "article_id": "develop-deliver-working-win32-app-via-intune",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why am I seeing a '2016281112 (Remediation Failed)' error in the Intune admin portal even though my custom VPN profile is working as expected?",
+    "answer": "This error can occur due to a mismatch in XML formatting between the Intune policy and the Windows 10 client response, but you can safely ignore it if the connection is working correctly.",
+    "article_id": "device-configuration-profile-reports-error-2016281112",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why does the ownership of an Android Enterprise work profile device automatically change to Corporate after enrollment in Microsoft Intune?",
+    "answer": "This issue occurs if a corporate identifier was added for the device in the Microsoft Intune Admin Center.",
+    "article_id": "device-ownership-changed-to-corporate",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What are the two potential causes for an iOS/iPadOS device getting stuck on a Microsoft Intune enrollment screen?",
+    "answer": "There's a temporary outage with Apple services or iOS/iPadOS enrollment is set to use VPP tokens but there's something wrong with the VPP token.",
+    "article_id": "device-stuck-in-enrollment",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why are devices still trying to enroll in Intune even though the subscription has been canceled?",
+    "answer": "This issue occurs because the CNAMEs set as prerequisites for device enrollment are still present, automatically redirecting devices to the Microsoft Intune servers.",
+    "article_id": "devices-enroll-canceled-intune-subscription",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What is the cause of the 0x80094800 error when devices fail to receive SCEP certificates?",
+    "answer": "The 0x80094800 error occurs because the requested certificate template is not supported by the Certificate Authority (CA).",
+    "article_id": "devices-receive-scep-certificates-error-0x80094800",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What can be done if the VPN has 'Always-on VPN' enabled, and users cannot disconnect and reconnect to the VPN?",
+    "answer": "Users can force a VPN reconnection by resetting the network of the device, either by disabling and enabling airplane mode or using 'Reset network settings' under 'Settings'.",
+    "article_id": "edge-ignore-pac-android-vpn-profile",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What is the cause of the error 0x80090014 when trying to install the NDES certificate?",
+    "answer": "The error 0x80090014 is caused by a failure of the CryptAcquireContext, which is required to add the NDES certificate to the private key.",
+    "article_id": "error-0x80090014-installing-ndes-certificate",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What is the cause of the error message 'One or more apps contain invalid bundleIDs. (0x87D13BA2)' when deploying a macOS LOB app in Microsoft Intune?",
+    "answer": "This problem occurs when multiple applications are included in a macOS app package, and the installation status of all individual applications isn't reported back to Intune.",
+    "article_id": "error-0x87d13ba2-deploy-macos-lob-app",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What happens if the Intune setting 'Factory reset protection emails' is configured on a corporate-owned device with a work profile?",
+    "answer": "In this scenario, FRP is expected to behave as shown in the table, which means factory reset protection is enforced.",
+    "article_id": "factory-reset-protection-emails-not-enforced",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "How can I resolve connectivity issues on client computers that use Microsoft Intune and have the automatic root certificate mechanism disabled?",
+    "answer": "Install the latest root certificates by searching for 'root update' in the Microsoft Update Catalog and downloading the latest root update package.",
+    "article_id": "fix-connectivity-issues",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why do I get the 'ZtdDeviceAlreadyAssigned (806)' or 'ZtdDeviceAssignedToOtherTenant (808)' error when importing a Windows Autopilot device CSV file in Intune?",
+    "answer": "This error occurs if a device is already registered in your tenant or if a record of the device already exists in Microsoft Intune, and the record must be removed before the device's CSV file can be imported.",
+    "article_id": "import-windows-autopilot-device-csv-files-errors",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Where can I find the ODJ Connector Service event logs to troubleshoot the Intune Connector for Active Directory issue?",
+    "answer": "The ODJ Connector Service event logs are located under Event Viewer > Application and Services Logs > Microsoft > Intune > ODJConnectorService.",
+    "article_id": "intune-connector-for-ad-not-appear",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What is the cause of the 'Unexpected error' when signing in to Intune Connector for Active Directory?",
+    "answer": "This issue occurs because the account isn't assigned an Intune or Microsoft Office license.",
+    "article_id": "intune-connector-signin-unexpected-error",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What should I do if an iOS or iPadOS device is not checking in with the Intune service?",
+    "answer": "Start the iOS/iPadOS Company Portal app to see if the device has lost contact with Intune and try to sync with Intune to reconnect.",
+    "article_id": "ios-devices-inactive",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What update should I install on Windows 10 devices to fix the incorrect compliance status issue?",
+    "answer": "You should install the update KB4469342 (OS Build 17763.168) for Windows 10, version 1809, KB4467682 (OS Build 17134.441) for Windows 10, version 1803, or KB4467681 (OS Build 16299.820) for Windows 10, version 1709.",
+    "article_id": "KB4469342",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What is the cause of the error -25244 (errSecInvalidOwnerEdit) when enrolling a macOS device in Intune?",
+    "answer": "The error is caused by stale or corrupted keychain entries on the macOS device.",
+    "article_id": "keychain-error-enrolling-macos-devices",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Will the 0x87D1FDE8 error in the Intune console affect the performance or behavior of Intune Managed Browser?",
+    "answer": "No, the error doesn't affect the performance or behavior of Intune Managed Browser.",
+    "article_id": "managed-browser-policy-triggers-error-0x87d1fde8",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What error message is logged in the CoManagementHandler.log file when MDM enrollment fails?",
+    "answer": "MDM enrollment failed with error code 0xcaa9001f. 'Integrated Windows authentication supported only in federation flow.' Will retry in 15 minutes...",
+    "article_id": "mdm-enrollment-error-0xcaa9001f",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What is the error code that is logged in the NDES Connector .svclog file when you encounter an unexpected error while signing in to the NDES Connector UI?",
+    "answer": "The error code logged in the NDES Connector .svclog file is 0x80004003.",
+    "article_id": "ndes-connector-signin-error-80004003",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why do Microsoft 365 apps on macOS devices close and reinstall without notification?",
+    "answer": "This issue can occur due to either multiple deployments of Microsoft 365 apps being assigned as Required to the device or the Microsoft 365 Apps for macOS app suite being assigned as Required to the device.",
+    "article_id": "no-notification-microsoft365-apps-macos-reinstall",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why am I not prompted to enter my new email password after changing it in Intune?",
+    "answer": "This issue occurs because of a limitation of the Exchange ActiveSync (EAS) protocol when it uses basic authentication.",
+    "article_id": "no-password-prompt-after-password-change",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why can't I enroll a Windows device in Intune with a non-administrator account?",
+    "answer": "This is because the account is not a member of the local Administrators group, which is required for enrollment.",
+    "article_id": "no-permission-to-enroll-windows-devices",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why are users not prompted for fingerprint identity for managed apps on Samsung Note 4 devices?",
+    "answer": "This issue occurs because Samsung Galaxy Note 4 devices use a Samsung proprietary fingerprint management API that isn't supported by Intune.",
+    "article_id": "no-prompt-for-fingerprint-identity",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why is only one Intune app configuration policy being applied to Edge or Managed Browser?",
+    "answer": "Intune does not currently support merging Edge or Managed Browser policies, which is why only one policy is being applied.",
+    "article_id": "only-one-app-policy-applied-edge-managed-browser",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What should I do if a device's user principal name (UPN) in Intune is listed as 'None'?",
+    "answer": "This issue occurs when a user is removed from Microsoft Entra ID before deleting their enrolled device in Microsoft Intune. You can use a script called RemoveIntuneDevice.ps1 to remove the orphaned device.",
+    "article_id": "orphaned-device-upn-shown-as-none",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why does editing a policy in Intune reset the password expiration timer?",
+    "answer": "This issue occurs because editing a policy resets the password expiration timer, even if the 'Password expiration' setting is not changed.",
+    "article_id": "password-expiration-setting-not-working",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What should I do if a user receives a 'Profile installation failed. A Network Error Has Occurred' error on their iOS/iPadOS device?",
+    "answer": "Back up the device data to an alternative storage/cloud location and then put the device in recovery mode, restoring it as a new device.",
+    "article_id": "profile-installation-failed",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What Event ID error is generated when RemoteWipe fails to execute on a Windows 10 client?",
+    "answer": "An Event ID 400 error is generated in the Microsoft-Windows-DeviceManagement-Enterprise-Diagnostics-Provider/Admin event log.",
+    "article_id": "remotewipe-fails-sending-dowipe-command",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "What is the recommended method for removing duplicate or stale devices from Microsoft Entra ID?",
+    "answer": "Microsoft recommends using PowerShell to remove duplicate or stale devices from Microsoft Entra ID. However, if necessary, you can also remove Intune-managed devices manually.",
+    "article_id": "remove-duplicate-mobile-device-management",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why do I receive the 'Your organization has removed its data associated with this app' error message when opening Outlook for Android?",
+    "answer": "This error occurs due to one of the following reasons: Outlook has been offline for a long time, or Outlook can't detect whether the Company Portal app is installed after a system update.",
+    "article_id": "removed-data-associated-with-app-error",
+    "category": "DeviceMgmt"
+  },
+  {
+    "question": "Why is the Intune device restriction policy not preventing users from enabling the Personal Hotspot feature on their iOS devices?",
+    "answer": "This is an expected behavior in iOS 12.1 and earlier, and users can only be prevented from enabling the feature in iOS 12.2 or later.",
+    "article_id": "restriction-policy-not-blocking-personal-hotspot",
+    "category": "DeviceMgmt"
+  }
+]
