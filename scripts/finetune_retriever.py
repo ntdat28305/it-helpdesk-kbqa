@@ -23,8 +23,8 @@ from torch.utils.data import DataLoader
 PAIRS_FILE  = Path("data/finetune_pairs.jsonl")
 OUTPUT_DIR  = Path("models/retriever")
 BASE_MODEL  = "msmarco-MiniLM-L6-cos-v5"
-EPOCHS      = 15
-BATCH_SIZE  = 32
+EPOCHS      = 10
+BATCH_SIZE  = 128  # A100 80GB — batch lớn = nhiều in-batch negatives hơn cho MNRL
 
 
 def load_pairs() -> list[dict]:
@@ -129,6 +129,7 @@ def main():
         warmup_steps=warmup_steps,
         output_path=str(OUTPUT_DIR),
         show_progress_bar=True,
+        bf16=True,  # A100 native bf16 — nhanh hơn fp32, không mất accuracy
     )
     if evaluator is not None:
         fit_kwargs["evaluator"]        = evaluator
