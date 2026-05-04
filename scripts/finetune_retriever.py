@@ -18,7 +18,6 @@ from sentence_transformers import (
     evaluation,
     losses,
 )
-from sentence_transformers.training_args import SentenceTransformerTrainingArguments
 from torch.utils.data import DataLoader
 
 PAIRS_FILE  = Path("data/finetune_pairs.jsonl")
@@ -124,24 +123,18 @@ def main():
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    training_args = SentenceTransformerTrainingArguments(
-        output_dir=str(OUTPUT_DIR),
-        num_train_epochs=EPOCHS,
-        per_device_train_batch_size=BATCH_SIZE,
-        warmup_steps=warmup_steps,
-        bf16=True,
-        dataloader_drop_last=True,
-        eval_strategy="steps" if evaluator is not None else "no",
-        eval_steps=len(train_dataloader) if evaluator is not None else None,
-        save_strategy="best" if evaluator is not None else "epoch",
-        load_best_model_at_end=evaluator is not None,
-    )
-
     fit_kwargs: dict = dict(
         train_objectives=[(train_dataloader, train_loss)],
-        args=training_args,
-        evaluator=evaluator,
+        epochs=EPOCHS,
+        warmup_steps=warmup_steps,
+        output_path=str(OUTPUT_DIR),
+        use_amp=True,
+        show_progress_bar=True,
     )
+    if evaluator is not None:
+        fit_kwargs["evaluator"]        = evaluator
+        fit_kwargs["evaluation_steps"] = len(train_dataloader)
+        fit_kwargs["save_best_model"]  = True
 
     model.fit(**fit_kwargs)
 
