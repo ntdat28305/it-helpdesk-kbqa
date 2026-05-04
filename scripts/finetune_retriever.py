@@ -135,7 +135,6 @@ def main():
         eval_steps=len(train_dataloader) if evaluator is not None else None,
         save_strategy="best" if evaluator is not None else "epoch",
         load_best_model_at_end=evaluator is not None,
-        show_progress_bar=True,
     )
 
     fit_kwargs: dict = dict(
