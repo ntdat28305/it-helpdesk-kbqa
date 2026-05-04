@@ -1,302 +1,296 @@
 [
   {
-    "question": "I'm trying to set up a new work profile on my iPhone but it keeps saying the device is busy, what's going on?",
-    "answer": "Try unlocking your iPhone, as this issue often occurs when the device is locked or busy with another task, such as installing an app or iOS update.",
-    "article_id": "2016341112-ios-device-is-currently-busy",
+    "question": "I assigned a certificate to my devices through Intune, but they're not getting it. What's going on?",
+    "answer": "Check the IIS logs on the computer running the Intune NDES Connector for HTTP 500 error entries, which may indicate the issue. You can try resolving these errors to fix the certificate profile status.",
+    "article_id": "certificateregistrationsvc-verify-request-error",
     "category": "DeviceMgmt"
   },
   {
-    "question": "I'm trying to send a picture from my work email on my company phone, but it keeps saying it can't attach the file. What's going on?",
-    "answer": "You need to install a File Explorer app from the managed Google Play store and assign it to your device. This will allow you to attach photos to your work email.",
-    "article_id": "android-enterprise-enrolled-devices-fails-attaching-photo",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm trying to install an app on my Android device but it keeps failing, what could be the problem?",
-    "answer": "The app installation might be failing due to a bad APK file or because Google Play Protect is blocking the install, try checking the app's download source and see if you can install it manually.",
-    "article_id": "app-install-error-codes",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I updated an app on my work phone but it says it failed to install, what should I do?",
+    "question": "I updated an app on my work phone but it won't install, what's going on?",
     "answer": "Try reinstalling the app from the Company Portal on your device to fix the issue.",
     "article_id": "app-installation-failed-error",
     "category": "DeviceMgmt"
   },
   {
-    "question": "I turned on my new iPhone, but it's not automatically signing in to my work account. What should I do?",
-    "answer": "Make sure an enrollment profile exists and is assigned to your device, then update the profile by making any change and synchronizing your device in the Microsoft Intune admin center.",
-    "article_id": "apple-dep-device-fails-auto-enrollment",
+    "question": "I'm trying to set up my work computer, but it keeps asking me for permission to access the Enrollment Status Page. What's going on?",
+    "answer": "Try changing directories or signing in to see if that resolves the issue. If not, you can also try collecting ESP logs to get more information about the problem.",
+    "article_id": "understand-troubleshoot-esp",
     "category": "DeviceMgmt"
   },
   {
-    "question": "I set up my work phone using Intune, but now I'm being asked to set a password even though I've already finished the setup process.",
-    "answer": "This is likely because the password settings were assigned to your device before you enrolled it in Intune. Try manually setting a password that meets the requirements to resolve the issue.",
-    "article_id": "assign-password-setting-android-fully-managed",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm trying to connect my work laptop to the company network but it's not recognizing my device, what should I do?",
-    "answer": "Try using the Device Registration Troubleshooter Tool to resolve common device registration issues, such as selecting option 5 if your device health status is 'Pending'.",
-    "article_id": "azure-ad-device-registration-autopilot",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I've got a Windows 10 laptop that's been encrypted, but it's still saying I'm not compliant with company policies - what's going on?",
-    "answer": "It's possible that the encryption process isn't finished yet, so try waiting for a bit and then check again. Once encryption is complete, your device should show as compliant.",
-    "article_id": "bitlocker-encrypted-device-not-compliant",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I renewed my company's security certificate, but now I can't assign it to my work devices, what's going on?",
-    "answer": "Try using the Certificate Connector for Microsoft Intune instead of the Microsoft Intune Connector, as the latter is being replaced and may cause issues.",
-    "article_id": "cannot-assign-scep-certificates",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I tried to delete a profile for my company's Windows devices, but it won't let me - what's going on?",
-    "answer": "You need to unassign the profile from any groups it's assigned to in Microsoft Entra ID before you can delete it. If a group was deleted, you can wait up to seven days for the assignment to be removed, then try deleting the profile again.",
-    "article_id": "cannot-delete-autopilot-deployment-profile",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm having trouble installing apps on my Mac and running scripts, what's going on?",
-    "answer": "Try checking if the Microsoft Intune management agent is installed successfully, as issues with this agent may be causing the problems you're experiencing.",
-    "article_id": "cannot-install-macos-apps-and-run-shell-scripts",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I enrolled my Windows 10 laptop in our company's Intune system, but it's not syncing with it anymore. What could be the problem?",
-    "answer": "Check if the 'Device Management Wireless Application Protocol' service is enabled on your laptop. If it's disabled, try re-enabling it to resolve the issue.",
-    "article_id": "cannot-sync-windows-10-devices",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm trying to remove some free apps from my work iPhone, but Intune won't let me. What can I do?",
-    "answer": "Try adding the apps to Intune, assigning them as Available or Required, and then change the assignment type to Uninstall to remove them from your device.",
-    "article_id": "cannot-uninstall-apple-app-store-apps",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm trying to use my work device but it keeps telling me to update my enrollment, but it won't let me do it. What's going on?",
-    "answer": "Try updating the Company Portal app on your device to the latest version. This should resolve the issue and allow you to update your enrollment.",
-    "article_id": "cannot-update-enrollment",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm trying to set up certificates on my company devices, but they're not working and I keep seeing error messages. What's going on?",
-    "answer": "Check the IIS logs on the computer running the Microsoft Intune NDES Connector for HTTP 500 error entries, which may indicate a problem with the CertificateRegistrationSvc verify request.",
-    "article_id": "certificateregistrationsvc-verify-request-error",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm trying to set up my work phone, but I'm not sure how to separate my personal and work apps. Can you help me?",
-    "answer": "To separate your personal and work apps, you can set up an Android Enterprise work profile on your device, which will store work apps and data in a separate, company-managed space.",
-    "article_id": "configure-android-enterprise-devices-intune",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm trying to set up my new iPhone for work, but it's not connecting to the company's device enrollment system and I'm getting an error message. What's going on?",
-    "answer": "Try checking your internet connection and ensure that your iPhone is assigned the correct enrollment profile. If the issue persists, contact your IT department for further assistance.",
-    "article_id": "dep-enrollment-xpc-type-error",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm having trouble setting up a specific setting on my work computer, but I don't see it in the Intune admin center. What can I do?",
-    "answer": "You can deploy a custom OMA-URI profile that uses a Windows Configuration Service Provider (CSP) to set the setting on your device.",
-    "article_id": "deploy-oma-uris-to-target-csp-via-intune",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I tried to install a new program on my work computer but it's not showing up, what's going on?",
-    "answer": "Check if the program was deployed through Intune and if it's not detected as installed on your device, it might not be downloaded and installed. Try checking the Intune settings to see if there are any rules or detection logic that might be preventing the installation.",
-    "article_id": "develop-deliver-working-win32-app-via-intune",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I created a custom VPN profile for my work laptop, but it keeps saying it failed even though I can connect to the VPN just fine. Is this a problem?",
-    "answer": "No, this error message is safe to ignore as long as your VPN connection is working correctly. You can disregard the 'Remediation Failed' message in the Intune admin center.",
-    "article_id": "device-configuration-profile-reports-error-2016281112",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I enrolled my work phone in the company system and now it says the ownership is with the company, what's going on?",
-    "answer": "Try deleting the corporate identifier for your device and changing the ownership back to personal in the Microsoft Intune Admin Center.",
-    "article_id": "device-ownership-changed-to-corporate",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "My iPad is stuck on a screen that says it's waiting for a configuration from Microsoft, what should I do?",
-    "answer": "Try restarting the enrollment process and if that doesn't work, you may need to wipe the device and start over.",
-    "article_id": "device-stuck-in-enrollment",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "My devices keep trying to connect to the old work account even though I switched to a new MDM provider, how do I stop this?",
-    "answer": "You need to modify your CNAME records with your domain name provider to point to the new MDM provider, not Intune.",
-    "article_id": "devices-enroll-canceled-intune-subscription",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "My devices are having trouble getting the security certificates they need to connect to the network, what's going on?",
-    "answer": "This issue is likely due to a problem with the certificate template on the server, try checking the certificate settings to see if they need to be updated.",
-    "article_id": "devices-receive-scep-certificates-error-0x80094800",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm trying to use Microsoft Edge on my Android 13 phone, but it's not connecting to the internet through my work VPN. What can I try?",
-    "answer": "Try disconnecting and reconnecting to the VPN while Microsoft Edge is running, or if that's not possible, reset your device's network settings.",
-    "article_id": "edge-ignore-pac-android-vpn-profile",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm trying to set up a new device for work, but it's not recognizing my certificate. What's going on?",
-    "answer": "Try creating a new certificate as a v2 certificate, which should resolve the issue. This type of certificate is typically created using a webserver template and includes Client Authentication as an Enhanced Key Usage value.",
-    "article_id": "error-0x80090014-installing-ndes-certificate",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I published a work app on my Mac, but it says it failed to install and I have no idea why",
-    "answer": "Try checking if the app package includes multiple applications, as this can cause the installation status to not be reported correctly to Intune. If so, try separating the apps into individual packages to resolve the issue.",
-    "article_id": "error-0x87d13ba2-deploy-macos-lob-app",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I reset my company phone to factory settings and now it's asking for a Google account, but I don't remember setting one up. What should I do?",
-    "answer": "If you have a corporate-owned device with a work profile, try entering the email address you provided in the Factory reset protection emails setting to unlock your device.",
-    "article_id": "factory-reset-protection-emails-not-enforced",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm having trouble connecting to the internet on my work computer, what could be the problem?",
-    "answer": "Try installing the latest root certificates to resolve connectivity issues. You can find the latest updates on the Microsoft Update Catalog by searching for 'root update'.",
-    "article_id": "fix-connectivity-issues",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm trying to import my Windows devices into Intune, but it keeps saying they're already registered. What can I do?",
-    "answer": "Check if the device record already exists in Intune and remove it before importing the CSV file. This should resolve the issue.",
-    "article_id": "import-windows-autopilot-device-csv-files-errors",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I installed the Intune Connector for Active Directory, but it's not showing up in my Intune dashboard, what's going on?",
-    "answer": "The Intune Connector for Active Directory may not appear in Intune if there's an issue with the ODJ Connector Service, try checking the event logs for errors.",
-    "article_id": "intune-connector-for-ad-not-appear",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm trying to sign in to my Intune account but I keep getting an error message, what's going on?",
-    "answer": "Make sure you have an Intune license assigned to your user account, you can check this by contacting your IT administrator.",
-    "article_id": "intune-connector-signin-unexpected-error",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "My iPad isn't connecting to work, and I'm getting locked out of company resources. What can I do?",
-    "answer": "Try opening the Company Portal app on your iPad and see if it detects any issues with syncing with our company's Intune service. If it does, it should automatically try to reconnect and display a 'Sync successful' message if it's successful.",
-    "article_id": "ios-devices-inactive",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "My Windows 10 device is saying it's not compliant even though the firewall is turned on, what's going on?",
-    "answer": "Try installing the latest update for your Windows 10 version to fix the issue, or follow the workaround steps if you can't install the update.",
-    "article_id": "KB4469342",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm trying to enroll my Mac in our company's Intune system but it keeps failing with an error message. What's going on?",
-    "answer": "Try deleting stale or corrupted keychain entries on your Mac to resolve the issue. This should allow you to enroll successfully in Intune.",
-    "article_id": "keychain-error-enrolling-macos-devices",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I deployed a new browser policy to our company devices but the Intune console is showing an error message. Is this a problem or can I just ignore it?",
-    "answer": "This error can be safely ignored and doesn't affect the performance or behavior of the Intune Managed Browser. The issue should resolve itself after the device checks in again.",
+    "question": "I just deployed a new browser policy to my company devices, but the Intune console is showing an error message. Is this a problem I need to fix?",
+    "answer": "No, this error can be safely ignored as it doesn't affect the performance or behavior of the Intune Managed Browser. The error will go away after the device checks in again.",
     "article_id": "managed-browser-policy-triggers-error-0x87d1fde8",
     "category": "DeviceMgmt"
   },
   {
-    "question": "I'm trying to set up my work computer to connect to our company network, but it keeps saying it can't enroll with the MDM service. What's going on?",
-    "answer": "Try restarting the CoManagementHandler service and then retrying the MDM enrollment. This should resolve the issue with error code 0xcaa9001f.",
-    "article_id": "mdm-enrollment-error-0xcaa9001f",
+    "question": "I'm trying to sign in to my work account but I keep getting an error message saying there's an unexpected problem. What could be the issue?",
+    "answer": "It's possible that your account doesn't have the necessary license assigned. Try checking with your IT department to see if you have an Intune license assigned to your account.",
+    "article_id": "intune-connector-signin-unexpected-error",
     "category": "DeviceMgmt"
   },
   {
-    "question": "I'm trying to set up certificate enrollment for my company's devices but I keep getting an error message when I try to sign in to the NDES Connector UI. What's going on?",
-    "answer": "The issue might be due to a missing NDES Connector certificate. Try checking the NDES Connector .svclog file for error entries that resemble 'NDES Connector certificate could not be found'.",
-    "article_id": "ndes-connector-signin-error-80004003",
+    "question": "I'm having trouble connecting to the internet on my work computer, what could be the problem?",
+    "answer": "Try installing the latest root certificates to resolve the issue. You can use the Microsoft Update Catalog to find the latest root certificate updates.",
+    "article_id": "fix-connectivity-issues",
     "category": "DeviceMgmt"
   },
   {
-    "question": "My Microsoft Teams app keeps closing during calls and then restarting on my Mac, is there a way to fix this?",
-    "answer": "Try checking if multiple deployments of Microsoft 365 apps are assigned as 'Required' to your device, and if so, assign only one deployment. This should resolve the issue.",
-    "article_id": "no-notification-microsoft365-apps-macos-reinstall",
+    "question": "I'm having trouble accessing certain settings on my work computer, is there a way to get them working?",
+    "answer": "You can try deploying a custom OMA-URI profile that uses a Windows Configuration Service Provider (CSP) to access these settings.",
+    "article_id": "deploy-oma-uris-to-target-csp-via-intune",
     "category": "DeviceMgmt"
   },
   {
-    "question": "I changed my email password but I'm not being asked to enter it on my work iPhone, how do I fix this?",
-    "answer": "Try enabling Open Authentication (OAuth) in your email profile to prompt you for the new password.",
-    "article_id": "no-password-prompt-after-password-change",
+    "question": "I'm trying to access company resources on my device but it keeps saying I need to update my enrollment, but it won't let me update it. What's going on?",
+    "answer": "Try updating the Company Portal app on your device to the latest version, as an outdated version may be causing the issue.",
+    "article_id": "cannot-update-enrollment",
     "category": "DeviceMgmt"
   },
   {
-    "question": "I'm trying to set up my work computer with Intune, but it keeps saying I don't have the right permissions. What can I do?",
-    "answer": "Try logging in as a local administrator or use an alternative enrollment method like Windows Autopilot or joining a brand-new Windows 10 device.",
-    "article_id": "no-permission-to-enroll-windows-devices",
+    "question": "I'm trying to create a duplicate of my Windows 10 computer, but it keeps showing up as already enrolled in our company's device management system. What's going on?",
+    "answer": "This issue is likely due to the MDM enrollment not being properly removed during the Sysprep process. Try running the Sysprep tool again, and then manually remove the MDM enrollment before creating the duplicate.",
+    "article_id": "troubleshoot-sysprep-windows-10-device-enrolled-mdm",
     "category": "DeviceMgmt"
   },
   {
-    "question": "I'm trying to use a Samsung Galaxy Note 4 for work apps, but it keeps asking for my PIN instead of fingerprint login. Is there a way to fix this?",
-    "answer": "Unfortunately, this is a known issue with Samsung Galaxy Note 4 devices. You can try using a different device that supports a fingerprint management API that's compatible with our system.",
-    "article_id": "no-prompt-for-fingerprint-identity",
+    "question": "I'm trying to set up my work device with Intune, but it's not working. What should I do first?",
+    "answer": "Check that you've properly configured Intune to enable enrollment by following the setup instructions in our documentation.",
+    "article_id": "troubleshoot-device-enrollment-in-intune",
     "category": "DeviceMgmt"
   },
   {
-    "question": "I've assigned multiple settings to my Edge browser through Intune, but only one of them is taking effect. Why is this happening?",
-    "answer": "Intune doesn't currently support merging Edge policies, so you need to configure settings in only a single app configuration policy for each group. Create a separate policy for each group and make sure users aren't in multiple groups.",
-    "article_id": "only-one-app-policy-applied-edge-managed-browser",
+    "question": "My Windows 10 device stopped syncing with my work account after a few days, what's going on?",
+    "answer": "Try checking if the Device Management Wireless Application Protocol (dmwappushservice) service is enabled on your device, as it might have been disabled by a script or update.",
+    "article_id": "cannot-sync-windows-10-devices",
     "category": "DeviceMgmt"
   },
   {
-    "question": "I deleted a user's account from our company's ID system, but their device is still showing up in our Intune list - how do I get it to go away?",
-    "answer": "You can use a script available on the Microsoft website to remove the orphaned device from Intune. You'll need to download the script and have the user's UPN to complete the process.",
-    "article_id": "orphaned-device-upn-shown-as-none",
+    "question": "I'm trying to sign in to my work app but I keep getting an error message saying the server can't find the page I'm looking for. What's going on?",
+    "answer": "Check the web.config file for your app to make sure the Policy Name setting for sign-in is correct. If it's missing or incorrect, update it to resolve the issue.",
+    "article_id": "3092592",
+    "category": "Identity"
+  },
+  {
+    "question": "I'm trying to work from home but I'm not sure how to access Microsoft Teams with my work account, can you help?",
+    "answer": "You can enable your employees to work remotely by using Microsoft Teams with a free E1 license for six months, which can be found at Manage the Office 365 E1 Trial.",
+    "article_id": "faq-set-up-enterprise-work-remotely",
+    "category": "Identity"
+  },
+  {
+    "question": "I installed an app from the Google Play Store and now I'm having trouble logging in, what's going on?",
+    "answer": "This issue might be caused by a mismatch between the redirect URI in your app's configuration file and the one generated with your app's package name and signature hash. Check your app's registration in the Azure portal to resolve the issue.",
+    "article_id": "android-app-authentication-fails-after-published-to-google-play-store",
+    "category": "Identity"
+  },
+  {
+    "question": "I'm trying to log into my work account on my Android phone but it keeps saying the login page is unsafe, what's going on?",
+    "answer": "This issue is likely due to additional certificate downloads being required for Azure Active Directory Authentication Library (ADAL) authentication. Try checking your Security Token Service (STS) server's fully qualified domain name (FQDN) to see if it's the cause of the problem.",
+    "article_id": "adal-authenticate-android-devices-fail",
+    "category": "Identity"
+  },
+  {
+    "question": "I'm trying to install a new work tool but it keeps saying I don't have permission to start a service, what can I do?",
+    "answer": "Try assigning domain administrator credentials to the service, and if that doesn't work, you may need to change the Windows service credentials to a group Managed Service Account (gMSA).",
+    "article_id": "azure-ad-hybrid-sync-cannot-start-aadconnect-provisioning-agent",
+    "category": "Identity"
+  },
+  {
+    "question": "I'm trying to join a work project as a guest user but I keep getting an error message when I try to accept the invitation. What's going on?",
+    "answer": "This issue might be caused by a mismatch between the issuer URL in the SAML response and the one configured in Microsoft Entra ID. Try checking the invitation details and the Microsoft Entra ID settings to resolve the issue.",
+    "article_id": "error-aadsts50107-guest-redemption-fails",
+    "category": "Identity"
+  },
+  {
+    "question": "I'm trying to access my account info but I keep getting an error message saying I don't have permission, what's going on?",
+    "answer": "You need to use a token that's acquired through the authorization code flow, not the client credentials grant flow, to access your account info.",
+    "article_id": "error-call-me-endpoint-microsoft-graph",
+    "category": "Identity"
+  },
+  {
+    "question": "I'm trying to log into my work account but it keeps saying I'm not authenticated, what's going on?",
+    "answer": "This issue is likely caused by a problem with Integrated Windows Authentication (IWA) and Microsoft Authentication Library (MSAL). Try checking your Windows settings to ensure that IWA is properly configured.",
+    "article_id": "msal-client-exception-failed-to-get-user-name",
+    "category": "Identity"
+  },
+  {
+    "question": "I'm having trouble logging into my work account from my laptop, but it works fine on my desktop. What's going on?",
+    "answer": "This issue might be related to Azure Seamless Single Sign-On configuration, which can cause authentication failures from specific devices. Try checking your device's configuration to see if it's set up correctly.",
+    "article_id": "sign-in-office-365-azure-intune-sso-does-not-work",
+    "category": "Identity"
+  },
+  {
+    "question": "I just updated Microsoft Entra Connect and now my work computer is missing from the system, is this normal?",
+    "answer": "Yes, this is normal and doesn't affect your ability to access work resources, but if you see multiple devices being deleted, allow the deletions to go through.",
+    "article_id": "reference-connect-device-disappearance",
+    "category": "Identity"
+  },
+  {
+    "question": "I'm getting logged out of my work account every hour, is there a way to stay logged in for longer?",
+    "answer": "Yes, you can customize the middleware authentication ticket to extend the user sign-in duration beyond the default one hour expiration of Microsoft Entra ID tokens.",
+    "article_id": "customize-authentication-session-expiration",
+    "category": "Identity"
+  },
+  {
+    "question": "I'm getting an error message when trying to log into my work account through our company's website, it says something about a security token not being valid. What should I do?",
+    "answer": "Try checking the application's configuration settings to ensure that the security token issuer matches the one in your Microsoft Entra ID settings.",
+    "article_id": "troubleshoot-wif10201-no-validkey-securitytoken-mvc",
+    "category": "Identity"
+  },
+  {
+    "question": "I'm getting an error message saying the server is unavailable, but I'm trying to access a program on my network. What's going on?",
+    "answer": "This issue might be related to a Remote Procedure Call (RPC) error. Try checking the program's settings and ensuring that the RPC service is running on your server.",
+    "article_id": "rpc-errors-troubleshooting",
+    "category": "Network"
+  },
+  {
+    "question": "I'm trying to reconnect to a shared drive on my network but I keep getting an error message saying the drive is already in use. What's going on?",
+    "answer": "Try changing the registry setting on your server to 0 and rebooting it. This should resolve the issue and allow you to reconnect to the shared drive.",
+    "article_id": "system-error-85-net-use-command",
+    "category": "Network"
+  },
+  {
+    "question": "I keep getting a message saying my Windows isn't genuine, what's going on?",
+    "answer": "Try uninstalling the KB 971033 update, as it may be causing the issue. If you're still experiencing problems, contact your IT department for further assistance.",
+    "article_id": "4487266",
+    "category": "Network"
+  },
+  {
+    "question": "I'm trying to uninstall a program but it keeps saying it can't write to the log file, what's going on?",
+    "answer": "Try checking if the program's log file location is set to a writable directory, such as your user's Temp folder, and adjust it if necessary.",
+    "article_id": "error-opening-installation-log-file",
+    "category": "Software"
+  },
+  {
+    "question": "I'm trying to connect to a server using a high-numbered port, but I keep getting an error message saying my system is out of buffer space. What's going on?",
+    "answer": "Try increasing the buffer space on your system by modifying the registry, following the steps outlined in the article 'WSAENOBUFS (10055) error when connecting from TCP ports greater than 5000'.",
+    "article_id": "connect-tcp-greater-than-5000-error-wsaenobufs-10055",
+    "category": "Network"
+  },
+  {
+    "question": "My computer keeps saying it can't apply the settings from our company's network at startup, what's going on?",
+    "answer": "This issue is likely caused by a temporary network connection problem, try restarting your computer to see if it resolves the issue.",
+    "article_id": "fail-to-apply-group-policy-at-startup",
+    "category": "Network"
+  },
+  {
+    "question": "I mapped a drive to a network share, but it keeps disconnecting after a while. What's going on?",
+    "answer": "This is a normal behavior due to the default time-out period on the shared network computer. To resolve this, you can change the time-out period on the shared network computer to prevent the connection from dropping.",
+    "article_id": "mapped-drive-connection-to-network-share-lost",
+    "category": "Network"
+  },
+  {
+    "question": "My computer is sending weird DNS requests after I changed my network settings, is that normal?",
+    "answer": "Yes, this is a normal behavior in Windows, and it's not causing any harm. You don't need to take any action, but if you're concerned about performance, you can leave the queries as they are.",
+    "article_id": "dns-requests-random-network-properties-change",
+    "category": "Network"
+  },
+  {
+    "question": "I'm using a program that uses my smart card, but it keeps crashing with an error message saying the handle is invalid. What's going on?",
+    "answer": "This issue might be caused by the program not being designed to handle high loads, so try closing other resource-intensive programs to see if it resolves the issue.",
+    "article_id": "0x6-error-invalid-handle-multithreaded-application",
+    "category": "Network"
+  },
+  {
+    "question": "I want to hide some of my computer's drives from view, but I still need to access others. How can I do this?",
+    "answer": "You can use Group Policy Objects to hide specific drives while keeping others accessible. You can add restrictions by modifying the System.adm file for the default domain policy or any custom Group Policy Object (GPO).",
+    "article_id": "using-group-policy-objects-hide-specified-drives",
+    "category": "Network"
+  },
+  {
+    "question": "I'm trying to remove a network component from my Windows 10 computer but it won't let me, what's going on?",
+    "answer": "You can't uninstall the network component directly, but you can effectively remove it by unbinding the driver from your network adapters using the PowerShell cmdlet 'Disable-NetAdapterBinding'.",
+    "article_id": "cannot-uninstall-client-for-microsoft-networks",
+    "category": "Network"
+  },
+  {
+    "question": "I'm trying to connect to my work VPN but I keep getting an error message saying the remote computer isn't responding. What's going on?",
+    "answer": "Try checking your network firewall settings to make sure they're allowing the necessary traffic for your VPN connection. Specifically, ensure that GRE protocol 47 and TCP traffic on port 1723 are permitted.",
+    "article_id": "error-when-establishing-vpn-connection",
+    "category": "Network"
+  },
+  {
+    "question": "I opened the Teams app on my computer, but it just opened and then immediately closed - what's going on?",
+    "answer": "Check your network configuration to ensure that a firewall or proxy settings aren't blocking Teams client access to the required endpoints.",
+    "article_id": "resolve-teams-client-launch-failures",
+    "category": "Teams"
+  },
+  {
+    "question": "I'm trying to join a meeting from my calendar, but Skype is opening instead of Teams. Why is this happening?",
+    "answer": "This issue occurs when the meeting was scheduled with Skype for Business. Try checking the meeting description for a URL that might be triggering Skype to launch.",
+    "article_id": "meeting-requires-skype-instead-of-teams",
+    "category": "Teams"
+  },
+  {
+    "question": "I'm trying to manage my company's phone settings in Microsoft Teams but I keep getting an error message. What's going on?",
+    "answer": "It's possible that you don't have the necessary product license to access the dial plan settings. Try checking with your administrator to see if you have the required license.",
+    "article_id": "errors-managing-dial-plans",
+    "category": "Teams"
+  },
+  {
+    "question": "I locked my Mac and when I came back, my Teams status was still showing I was offline, but I'm actually online. What's going on?",
+    "answer": "This issue might be caused by a stale presence status in Teams for Mac. Try restarting the Teams app to update your presence status.",
+    "article_id": "incorrect-presence-status-teams-for-mac",
+    "category": "Teams"
+  },
+  {
+    "question": "I'm trying to access our company's intranet portal in Microsoft Teams, but it's not showing up as a tab. What's going on?",
+    "answer": "Try opening Microsoft Teams in a web browser instead of the desktop app, as this should allow you to access the portal.",
+    "article_id": "websites-with-conditional-access-dont-display",
+    "category": "Teams"
+  },
+  {
+    "question": "My Microsoft Teams Room device is showing a warning message, but it's still working fine. Is this something I should be concerned about?",
+    "answer": "No, this warning doesn't affect the overall health status of your device, but you should check the power settings to ensure the 'Maximum processor state' is set to 100%.",
+    "article_id": "cpu-performance-limited-status-unhealthy",
+    "category": "Teams"
+  },
+  {
+    "question": "I'm having trouble with my Android device running Microsoft Teams, how do I get the necessary information to fix the issue?",
+    "answer": "To troubleshoot the issue, you'll need to collect diagnostic logs from your Android device. You can do this by going to the Microsoft Teams admin center, selecting the device, and downloading the logs.",
+    "article_id": "collect-device-logs",
+    "category": "Teams"
+  },
+  {
+    "question": "I'm trying to open Microsoft Teams but it's not loading, what's going on?",
+    "answer": "Try updating your browser settings by adding the Microsoft Teams URLs to the list of trusted sites, this should resolve the issue.",
+    "article_id": "teams-doesnt-load",
+    "category": "Teams"
+  },
+  {
+    "question": "I'm trying to add a new team member but I keep getting an error message saying I couldn't add them, what's going on?",
+    "answer": "Try changing the 'UsersPermissionToReadOtherUsersEnabled' setting in Microsoft Entra ID to True, this should resolve the issue.",
+    "article_id": "couldnt-add-member-error",
+    "category": "Teams"
+  },
+  {
+    "question": "I'm a Teams admin and some users can't schedule meetings between Teams and Outlook, what's going on?",
+    "answer": "The issue might be caused by a problematic installation of the Teams Meeting add-in, a switch from classic Teams to new Teams, or because the users' mailboxes are hidden from the Global Address List (GAL). Try troubleshooting and resolving the issue by checking the add-in installation and mailbox visibility.",
+    "article_id": "resolve-teams-meeting-add-in-issues",
+    "category": "Teams"
+  },
+  {
+    "question": "I'm having trouble updating the Teams app on my work computer, it just keeps failing. What can I do?",
+    "answer": "Try bulk deploying the Teams client to your device, which should resolve the update failure issue.",
+    "article_id": "resolve-teams-client-update-failures",
+    "category": "Teams"
+  },
+  {
+    "question": "I'm having trouble with my Microsoft Teams device, it won't sign in automatically and the app is showing an unhealthy status. What could be the problem?",
+    "answer": "The issue might be due to a missing or incorrectly configured local Windows user account named 'Skype'. Try signing in to the device with the Admin account and check if the Skype account exists.",
+    "article_id": "meeting-app-status-unhealthy",
+    "category": "Teams"
+  },
+  {
+    "question": "After I factory reset my work phone, it's asking for a Google account instead of my work email, what's going on?",
+    "answer": "If you've enabled the 'Factory reset protection emails' setting in Microsoft Intune, you should enter your work email address to unlock your device after a factory reset.",
+    "article_id": "factory-reset-protection-emails-not-enforced",
     "category": "DeviceMgmt"
   },
   {
-    "question": "I set my device password to expire after 180 days, but it's not prompting me to change it. What's going on?",
-    "answer": "This issue might be caused by editing the policy after it was initially assigned to your device, which resets the password expiration timer. Check the last modified date of the policy in the Microsoft Intune admin console to find the latest password expiration date.",
-    "article_id": "password-expiration-setting-not-working",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm trying to set up my work device but it keeps saying 'Profile installation failed' and I'm worried I'll lose all my files. What should I do?",
-    "answer": "Back up your device data to an alternative storage/cloud location, then put your device in recovery mode and restore it as a new device. This will prevent data loss and allow you to re-enroll the device.",
-    "article_id": "profile-installation-failed",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I tried to remotely wipe my Windows 10 computer but it didn't work and now I'm getting an error message saying the request is not supported. What should I do?",
-    "answer": "Try checking the event log for an Event ID 400 error and look for the 'The request is not supported' message. This issue is often caused by a problem with the RemoteWipe configuration service provider.",
-    "article_id": "remotewipe-fails-sending-dowipe-command",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I have multiple devices registered to the same user account in Microsoft Entra ID, but one of them is no longer in use. How can I safely remove it?",
-    "answer": "To remove the duplicate device, sign in to the Microsoft 365 admin center as an administrator, select Microsoft Entra ID > Users, and then select the user account associated with the device. From there, select Devices and remove the device that's no longer in use.",
-    "article_id": "remove-duplicate-mobile-device-management",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I'm getting a message saying my work account data was removed from the Outlook app on my phone, what's going on?",
-    "answer": "This issue occurs when the Outlook app can't detect the Company Portal app after a system update, causing you to be signed out of Outlook. Try signing in with your work or school account to reconnect.",
-    "article_id": "removed-data-associated-with-app-error",
-    "category": "DeviceMgmt"
-  },
-  {
-    "question": "I set up a policy to block the personal hotspot on my work iPhone, but it still lets me turn it on. What's going on?",
-    "answer": "This is a known issue with iOS 12.1 and earlier. You'll need to update your iPhone to iOS 12.2 or later to prevent this from happening.",
-    "article_id": "restriction-policy-not-blocking-personal-hotspot",
-    "category": "DeviceMgmt"
+    "question": "I tried to restore my computer from a backup but it failed and now I can't even turn it on, what's going on?",
+    "answer": "Try starting your system in Automatic Repair mode and see if it can fix the issue. If not, you may need to try a different backup location to avoid the error.",
+    "article_id": "2989057",
+    "category": "Hardware"
   }
 ]

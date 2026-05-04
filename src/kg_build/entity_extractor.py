@@ -23,7 +23,7 @@ load_dotenv()
 logger = get_logger(__name__, log_file="logs/entity_extractor.log")
 
 RAW_DIR       = Path("data/raw")
-CHECKPOINT    = Path("data/checkpoint.txt")
+CHECKPOINT    = Path("data/checkpoint.json")
 OUTPUT_DIR    = Path("data/processed")
 
 # ── Groq key rotation ─────────────────────────────────────────
@@ -82,17 +82,25 @@ class GroqRotator:
 
 # ── Checkpoint ────────────────────────────────────────────────
 
-def load_checkpoint() -> set[str]:
+def load_checkpoint() -> dict[str, str]:
+    """Load checkpoint JSON: {file_id: 'success'|'failed'}."""
     if not CHECKPOINT.exists():
-        return set()
-    done = set(CHECKPOINT.read_text(encoding="utf-8").splitlines())
-    logger.info(f"Checkpoint: {len(done)} files đã xử lý")
-    return done
+        return {}
+    try:
+        data = json.loads(CHECKPOINT.read_text(encoding="utf-8"))
+        done = {k: v for k, v in data.items() if v == "success"}
+        logger.info(f"Checkpoint: {len(done)} files đã xử lý thành công")
+        return data
+    except Exception:
+        logger.warning("Checkpoint corrupt, bắt đầu lại từ đầu")
+        return {}
 
 
-def save_checkpoint(file_id: str):
-    with open(CHECKPOINT, "a", encoding="utf-8") as f:
-        f.write(file_id + "\n")
+def save_checkpoint(checkpoint: dict[str, str]):
+    """Ghi toàn bộ checkpoint dict ra file (atomic overwrite)."""
+    tmp = CHECKPOINT.with_suffix(".tmp")
+    tmp.write_text(json.dumps(checkpoint, indent=2), encoding="utf-8")
+    tmp.replace(CHECKPOINT)
 
 
 # ── Prompt ────────────────────────────────────────────────────
@@ -119,26 +127,35 @@ Rules:
 - Return valid JSON only"""
 
 
+def _truncate_at_sentence(text: str, max_chars: int = 2000) -> str:
+    """Cắt text ở ranh giới câu thay vì giữa từ."""
+    if len(text) <= max_chars:
+        return text
+    truncated = text[:max_chars]
+    last_boundary = max(truncated.rfind(". "), truncated.rfind(".\n"), truncated.rfind("? "))
+    return truncated[:last_boundary + 1] if last_boundary > max_chars * 0.6 else truncated
+
+
 def extract(groq: GroqRotator, title: str, text: str) -> dict:
-    # Giới hạn text để không vượt token limit
-    text = text[:2000]
+    text = _truncate_at_sentence(text, max_chars=2000)
     prompt = PROMPT_TEMPLATE.format(title=title, text=text)
 
-    raw = groq.call(prompt)
-    if not raw:
-        return {}
+    for attempt in range(2):
+        raw = groq.call(prompt)
+        if not raw:
+            continue
+        try:
+            start = raw.find("{")
+            end   = raw.rfind("}") + 1
+            if start == -1 or end == 0:
+                logger.warning(f"Không tìm thấy JSON (attempt {attempt + 1})")
+                continue
+            return json.loads(raw[start:end])
+        except json.JSONDecodeError:
+            logger.warning(f"JSON parse fail (attempt {attempt + 1}), thử lại...")
 
-    # Parse JSON từ response
-    try:
-        # Tìm JSON trong response
-        start = raw.find("{")
-        end   = raw.rfind("}") + 1
-        if start == -1 or end == 0:
-            return {}
-        return json.loads(raw[start:end])
-    except json.JSONDecodeError:
-        logger.warning("Không parse được JSON từ response")
-        return {}
+    logger.warning("Không parse được JSON sau 2 lần thử")
+    return {}
 
 
 # ── Save processed ────────────────────────────────────────────
@@ -160,19 +177,20 @@ def save_processed(file_id: str, metadata: dict, result: dict):
 # ── Pipeline ──────────────────────────────────────────────────
 
 def run(limit: int | None = None, dry_run: bool = False):
-    keys     = get_api_keys()
-    groq     = GroqRotator(keys)
-    done     = load_checkpoint()
+    keys       = get_api_keys()
+    groq       = GroqRotator(keys)
+    checkpoint = load_checkpoint()
+    done_ids   = {k for k, v in checkpoint.items() if v == "success"}
 
     # Lấy tất cả raw files
     all_files = sorted(RAW_DIR.rglob("*.json"))
-    pending   = [f for f in all_files if f.name not in done]
+    pending   = [f for f in all_files if f.name not in done_ids]
 
     if limit:
         pending = pending[:limit]
 
     total = len(pending)
-    logger.info(f"Cần xử lý: {total} files (đã xong: {len(done)})")
+    logger.info(f"Cần xử lý: {total} files (đã xong: {len(done_ids)})")
 
     success, errors = 0, 0
 
@@ -187,6 +205,8 @@ def run(limit: int | None = None, dry_run: bool = False):
             metadata = data["metadata"]
         except Exception as e:
             logger.error(f"Lỗi đọc file {file_id}: {e}")
+            checkpoint[file_id] = "failed"
+            save_checkpoint(checkpoint)
             errors += 1
             continue
 
@@ -194,10 +214,12 @@ def run(limit: int | None = None, dry_run: bool = False):
 
         if not result:
             logger.warning(f"Không extract được: {file_id}")
+            checkpoint[file_id] = "failed"
+            save_checkpoint(checkpoint)
             errors += 1
             continue
 
-        entities = result.get("entities", [])
+        entities  = result.get("entities", [])
         relations = result.get("relations", [])
 
         if dry_run:
@@ -208,14 +230,14 @@ def run(limit: int | None = None, dry_run: bool = False):
             )
         else:
             save_processed(file_id, metadata, result)
-            save_checkpoint(file_id)
+            checkpoint[file_id] = "success"
+            save_checkpoint(checkpoint)
             success += 1
             logger.info(
                 f"  OK: {len(entities)} entities, "
                 f"{len(relations)} relations"
             )
-
-        time.sleep(2)
+        # No unconditional sleep — GroqRotator handles rate-limit adaptively
 
     logger.info(f"=== Xong: {success} success, {errors} errors ===")
 

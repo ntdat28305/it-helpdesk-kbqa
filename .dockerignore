@@ -1,6 +1,8 @@
 venv/
+.venv/
 __pycache__/
 *.pyc
+*.pyo
 .env
 data/raw/
 data/processed/
@@ -9,3 +11,11 @@ data/raw/.cache/
 logs/
 *.log
 .git/
+CLAUDE.md
+.claude/
+.agent/
+models/gcn_checkpoint/
+tests/
+*.md
+.github/
+REVIEW.md

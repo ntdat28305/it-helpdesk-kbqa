@@ -1,21 +1,30 @@
 # Environment
 .env
 venv/
+.venv/
 
 # Data — không push raw data
 data/raw/
 data/processed/
 data/checkpoint.txt
+data/checkpoint.json
+data/splits/
 data/discovered_urls.json
 data/raw/.cache/
 
 # Logs
 logs/
+*.log
 
 # Cache
 __pycache__/
 *.pyc
+*.pyo
 *.egg-info/
 
 # KHÔNG ignore models — cần cho deployment
 # models/
+
+CLAUDE.md
+.claude/
+.agent/

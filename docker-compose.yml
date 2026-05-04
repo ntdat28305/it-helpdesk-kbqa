@@ -5,7 +5,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.api
     container_name: kbqa_api
     ports:
       - "8000:8000"
@@ -14,7 +14,7 @@ services:
     volumes:
       - ./logs:/app/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 15s
       timeout: 5s
       retries: 3
@@ -23,7 +23,7 @@ services:
   ui:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.ui
     container_name: kbqa_ui
     ports:
       - "8501:8501"
@@ -31,6 +31,8 @@ services:
       - .env
     environment:
       - API_URL=http://api:8000
+    volumes:
+      - ./logs:/app/logs
     depends_on:
       api:
         condition: service_healthy

@@ -7,6 +7,7 @@ Chạy:
 """
 from __future__ import annotations
 
+from collections import OrderedDict
 from contextlib import asynccontextmanager
 from typing import Optional
 
@@ -16,24 +17,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from src.agent.agent import ITHelpdeskAgent
+from src.agent.neo4j_query import close_driver
 from src.utils.logger import get_logger
 
 load_dotenv()
 logger = get_logger(__name__, log_file="logs/api.log")
 
-# ── Global agent instance ─────────────────────────────────────
-agent: ITHelpdeskAgent | None = None
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Khởi tạo agent khi startup, cleanup khi shutdown."""
-    global agent
-    logger.info("Starting up — loading agent...")
-    agent = ITHelpdeskAgent()
-    logger.info("Agent ready!")
+    logger.info("Starting up...")
     yield
     logger.info("Shutting down...")
+    close_driver()  # close Neo4j singleton driver
 
 
 # ── FastAPI app ───────────────────────────────────────────────
@@ -44,6 +39,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# allow_origins=["*"] is intentional for demo; restrict to UI origin in production
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -74,18 +70,26 @@ class QueryResponse(BaseModel):
     entity: str
     sources: list[str]
     session_id: str
+    steps: list[dict] = []
 
 
 # ── Session management ────────────────────────────────────────
-# Mỗi session_id có agent riêng để giữ conversation history độc lập
-sessions: dict[str, ITHelpdeskAgent] = {}
+# LRU cache: mỗi session_id có agent riêng, tối đa MAX_SESSIONS sessions
+MAX_SESSIONS = 500
+sessions: OrderedDict[str, ITHelpdeskAgent] = OrderedDict()
 
 
 def get_or_create_session(session_id: str) -> ITHelpdeskAgent:
-    """Lấy hoặc tạo agent cho session."""
-    if session_id not in sessions:
-        sessions[session_id] = ITHelpdeskAgent()
-        logger.info(f"New session: {session_id}")
+    """Lấy hoặc tạo agent cho session. Evict session cũ nhất nếu vượt MAX_SESSIONS."""
+    if session_id in sessions:
+        sessions.move_to_end(session_id)
+        return sessions[session_id]
+    if len(sessions) >= MAX_SESSIONS:
+        oldest = next(iter(sessions))
+        del sessions[oldest]
+        logger.info(f"Evicted oldest session: {oldest}")
+    sessions[session_id] = ITHelpdeskAgent()
+    logger.info(f"New session: {session_id}")
     return sessions[session_id]
 
 
@@ -96,7 +100,6 @@ async def health_check():
     """Kiểm tra API còn sống không."""
     return {
         "status": "ok",
-        "agent_loaded": agent is not None,
         "active_sessions": len(sessions),
     }
 
@@ -123,6 +126,7 @@ async def query(request: QueryRequest):
             entity=result["entity"],
             sources=result["sources"],
             session_id=request.session_id,
+            steps=result.get("steps", []),
         )
 
     except Exception as e:
@@ -132,11 +136,11 @@ async def query(request: QueryRequest):
 
 @app.delete("/session/{session_id}")
 async def reset_session(session_id: str):
-    """Reset conversation history của một session."""
+    """Xóa session và toàn bộ conversation history."""
     if session_id in sessions:
-        sessions[session_id].reset_history()
-        logger.info(f"Session reset: {session_id}")
-        return {"message": f"Session {session_id} đã được reset"}
+        del sessions[session_id]
+        logger.info(f"Session deleted: {session_id}")
+        return {"message": f"Session {session_id} đã được xóa"}
     return {"message": f"Session {session_id} không tồn tại"}
 
 

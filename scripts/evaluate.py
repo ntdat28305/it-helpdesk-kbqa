@@ -2,6 +2,10 @@
 scripts/evaluate.py
 Đánh giá Agent vs BM25 baseline trên test set.
 
+Metrics:
+  - Hit@1, Hit@5, MRR  — retrieval (có tìm đúng article không)
+  - ROUGE-L             — answer quality (so sánh với reference answer)
+
 Chạy:
     python scripts/evaluate.py
 """
@@ -9,18 +13,22 @@ from __future__ import annotations
 
 import json
 import os
-import time
+import re
+import uuid
+from collections import defaultdict
 from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
-from rank_bm25 import BM25Okapi
+from rouge_score import rouge_scorer
 
 load_dotenv()
 
 TEST_SET_FILE = Path("data/test_set.json")
 RAW_DIR       = Path("data/raw")
-API_URL       = "http://localhost:8000"
+API_URL       = os.environ.get("API_URL", "http://localhost:8000")
+
+_rouge = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=False)
 
 
 # ── Load data ─────────────────────────────────────────────────
@@ -30,7 +38,7 @@ def load_test_set() -> list[dict]:
 
 
 def load_all_articles() -> list[dict]:
-    """Load tất cả raw articles làm corpus cho BM25."""
+    """Load raw articles làm corpus BM25. Trả về [] nếu data/raw/ trống."""
     articles = []
     for f in RAW_DIR.rglob("*.json"):
         if ".cache" in str(f):
@@ -50,67 +58,69 @@ def load_all_articles() -> list[dict]:
 
 # ── BM25 Baseline ─────────────────────────────────────────────
 
-def build_bm25(articles: list[dict]) -> tuple[BM25Okapi, list[dict]]:
-    """Build BM25 index từ tất cả articles."""
-    corpus = [
-        (a["title"] + " " + a["text"]).lower().split()
-        for a in articles
-    ]
-    bm25 = BM25Okapi(corpus)
-    return bm25, articles
+def _tokenize(text: str) -> list[str]:
+    return [t for t in re.findall(r"\w+", text.lower()) if len(t) > 2]
 
 
-def bm25_search(
-    bm25: BM25Okapi,
-    articles: list[dict],
-    query: str,
-    top_k: int = 5,
-) -> list[str]:
-    """Tìm top-k articles bằng BM25."""
-    tokens = query.lower().split()
+def build_bm25(articles: list[dict]):
+    from rank_bm25 import BM25Okapi
+    corpus = [_tokenize(a["title"] + " " + a["text"]) for a in articles]
+    return BM25Okapi(corpus), articles
+
+
+def bm25_search(bm25, articles: list[dict], query: str, top_k: int = 5) -> list[str]:
+    tokens = _tokenize(query)
     scores = bm25.get_scores(tokens)
     top_ids = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
     return [articles[i]["article_id"] for i in top_ids]
 
 
-# ── Agent search ──────────────────────────────────────────────
+# ── Agent ─────────────────────────────────────────────────────
 
-def agent_search(question: str, session_id: str = "eval") -> list[str]:
-    """Gọi Agent API, lấy sources."""
+def agent_search(
+    question: str,
+    url_to_id: dict,
+    session_id: str,
+) -> tuple[list[str], str, str]:
+    """Trả về (article_ids, tool_used, answer_text)."""
     try:
         resp = requests.post(
             f"{API_URL}/query",
             json={"question": question, "session_id": session_id},
-            timeout=60,
+            timeout=90,
         )
         resp.raise_for_status()
-        data = resp.json()
-        # Extract article_id từ URLs
-        sources = data.get("sources", [])
-        article_ids = []
-        for url in sources:
-            # URL cuối là article slug = article_id
-            slug = url.rstrip("/").split("/")[-1]
-            article_ids.append(slug)
-        return article_ids
+        data       = resp.json()
+        tool_used  = data.get("tool_used", "UNKNOWN")
+        answer     = data.get("answer", "")
+        sources    = data.get("sources", [])
+        article_ids = [
+            url_to_id.get(url, url.rstrip("/").split("/")[-1])
+            for url in sources
+        ]
+        return article_ids, tool_used, answer
     except Exception as e:
         print(f"  API error: {e}")
-        return []
+        return [], "ERROR", ""
 
 
 # ── Metrics ───────────────────────────────────────────────────
 
 def hit_at_k(retrieved: list[str], relevant: str, k: int) -> float:
-    """Hit@K: 1 nếu relevant trong top-k, 0 nếu không."""
     return 1.0 if relevant in retrieved[:k] else 0.0
 
 
 def reciprocal_rank(retrieved: list[str], relevant: str) -> float:
-    """Reciprocal Rank cho MRR."""
     for i, doc_id in enumerate(retrieved, 1):
         if doc_id == relevant:
             return 1.0 / i
     return 0.0
+
+
+def rouge_l(hypothesis: str, reference: str) -> float:
+    if not hypothesis or not reference:
+        return 0.0
+    return _rouge.score(hypothesis, reference)["rougeL"].fmeasure
 
 
 # ── Evaluation pipeline ───────────────────────────────────────
@@ -118,80 +128,184 @@ def reciprocal_rank(retrieved: list[str], relevant: str) -> float:
 def evaluate():
     print("Loading test set...")
     test_set = load_test_set()
-    print(f"Test set: {len(test_set)} questions")
+    n        = len(test_set)
+    print(f"Test set: {n} questions")
 
-    print("Loading articles for BM25...")
+    # Category distribution
+    cat_dist: dict[str, int] = defaultdict(int)
+    for qa in test_set:
+        cat_dist[qa.get("category", "?")] += 1
+    print("Category distribution: " + ", ".join(f"{c}={v}" for c, v in sorted(cat_dist.items())))
+
+    # BM25 setup — optional, skip gracefully if no raw data
+    bm25_available = False
+    bm25 = bm25_articles = None
+    print("\nLoading articles for BM25...")
     articles = load_all_articles()
-    print(f"Corpus: {len(articles)} articles")
+    if articles:
+        print(f"Corpus: {len(articles)} articles")
+        bm25, bm25_articles = build_bm25(articles)
+        url_to_id = {a["url"]: a["article_id"] for a in articles if a.get("url")}
+        bm25_available = True
+    else:
+        print("WARNING: data/raw/ empty — skipping BM25 baseline")
+        url_to_id = {}
 
-    print("Building BM25 index...")
-    bm25, articles = build_bm25(articles)
+    # Unique run ID để tránh session contamination khi chạy nhiều lần
+    run_id = uuid.uuid4().hex[:8]
+    print(f"\nRun ID: {run_id}")
 
-    # Metrics
-    bm25_hit1  = bm25_hit5  = bm25_mrr  = 0.0
-    agent_hit1 = agent_hit5 = agent_mrr = 0.0
-    total = len(test_set)
+    # Accumulators
+    bm25_h1 = bm25_h5 = bm25_mrr = 0.0
+    ag_h1 = ag_h5 = ag_mrr = ag_rl = 0.0
+    tool_stats: dict[str, dict] = defaultdict(
+        lambda: {"h1": 0.0, "h5": 0.0, "mrr": 0.0, "rl": 0.0, "count": 0}
+    )
+    cat_stats: dict[str, dict] = defaultdict(
+        lambda: {"h1": 0.0, "mrr": 0.0, "rl": 0.0, "count": 0}
+    )
 
-    print(f"\nEvaluating {total} questions...\n")
+    print(f"\nEvaluating {n} questions...\n")
 
     for i, qa in enumerate(test_set, 1):
         question   = qa["question"]
         article_id = qa["article_id"]
+        ref_answer = qa.get("answer", "")
+        category   = qa.get("category", "?")
 
-        print(f"[{i}/{total}] {question[:60]}...")
+        print(f"[{i:02d}/{n}] {question[:65]}...")
 
         # BM25
-        bm25_results = bm25_search(bm25, articles, question, top_k=5)
-        bm25_hit1  += hit_at_k(bm25_results, article_id, 1)
-        bm25_hit5  += hit_at_k(bm25_results, article_id, 5)
-        bm25_mrr   += reciprocal_rank(bm25_results, article_id)
+        if bm25_available:
+            bm25_results = bm25_search(bm25, bm25_articles, question, top_k=5)
+            bm25_h1  += hit_at_k(bm25_results, article_id, 1)
+            bm25_h5  += hit_at_k(bm25_results, article_id, 5)
+            bm25_mrr += reciprocal_rank(bm25_results, article_id)
 
-        # Agent
-        agent_results = agent_search(question, session_id=f"eval_{i}")
-        agent_hit1  += hit_at_k(agent_results, article_id, 1)
-        agent_hit5  += hit_at_k(agent_results, article_id, 5)
-        agent_mrr   += reciprocal_rank(agent_results, article_id)
+        # Agent — session ID gắn run_id để không bị contaminate
+        session_id = f"eval_{run_id}_{i}"
+        ag_results, tool_used, ag_answer = agent_search(question, url_to_id, session_id)
 
-        print(f"  BM25: {bm25_results[:3]} | Agent: {agent_results[:3]}")
-        time.sleep(2)
+        h1 = hit_at_k(ag_results, article_id, 1)
+        h5 = hit_at_k(ag_results, article_id, 5)
+        rr = reciprocal_rank(ag_results, article_id)
+        rl = rouge_l(ag_answer, ref_answer)
 
-    # Tổng kết
-    print("\n" + "="*60)
+        ag_h1  += h1
+        ag_h5  += h5
+        ag_mrr += rr
+        ag_rl  += rl
+
+        tool_stats[tool_used]["h1"]    += h1
+        tool_stats[tool_used]["h5"]    += h5
+        tool_stats[tool_used]["mrr"]   += rr
+        tool_stats[tool_used]["rl"]    += rl
+        tool_stats[tool_used]["count"] += 1
+
+        cat_stats[category]["h1"]    += h1
+        cat_stats[category]["mrr"]   += rr
+        cat_stats[category]["rl"]    += rl
+        cat_stats[category]["count"] += 1
+
+        rl_str = f"ROUGE-L={rl:.2f}"
+        print(f"  [{tool_used}] Hit@1={h1:.0f}  MRR={rr:.2f}  {rl_str}  | {ag_results[:2]}")
+
+    # ── Summary ───────────────────────────────────────────────
+    print("\n" + "=" * 65)
     print("EVALUATION RESULTS")
-    print("="*60)
-    print(f"{'Metric':<15} {'BM25':>10} {'Agent':>10} {'Improvement':>12}")
-    print("-"*50)
+    print("=" * 65)
 
-    metrics = [
-        ("Hit@1",  bm25_hit1/total,  agent_hit1/total),
-        ("Hit@5",  bm25_hit5/total,  agent_hit5/total),
-        ("MRR",    bm25_mrr/total,   agent_mrr/total),
-    ]
+    if bm25_available:
+        print(f"\n{'Metric':<12} {'BM25':>8} {'Agent':>8} {'Delta':>8}  ({'%'})")
+        print("-" * 50)
+        metrics = [
+            ("Hit@1",   bm25_h1/n,  ag_h1/n),
+            ("Hit@5",   bm25_h5/n,  ag_h5/n),
+            ("MRR",     bm25_mrr/n, ag_mrr/n),
+        ]
+        for name, b, a in metrics:
+            d    = a - b
+            pct  = (d / b * 100) if b > 0 else float("nan")
+            pcts = f"{pct:+.1f}%" if b > 0 else "N/A"
+            print(f"{name:<12} {b:>8.3f} {a:>8.3f} {d:>+8.3f}  ({pcts})")
+    else:
+        print(f"\n{'Metric':<12} {'Agent':>8}")
+        print("-" * 24)
+        for name, val in [("Hit@1", ag_h1/n), ("Hit@5", ag_h5/n), ("MRR", ag_mrr/n)]:
+            print(f"{name:<12} {val:>8.3f}")
 
-    for name, bm25_score, agent_score in metrics:
-        improvement = ((agent_score - bm25_score) / max(bm25_score, 0.001)) * 100
-        print(f"{name:<15} {bm25_score:>10.3f} {agent_score:>10.3f} {improvement:>+11.1f}%")
+    print(f"\n{'ROUGE-L':<12} {'—':>8} {ag_rl/n:>8.3f}   (answer quality vs reference)")
 
-    print("="*60)
+    # ── Per-tool ──────────────────────────────────────────────
+    if tool_stats:
+        print("\n" + "-" * 65)
+        print("PER-TOOL BREAKDOWN")
+        print(f"{'Tool':<12} {'N':>4} {'Hit@1':>7} {'Hit@5':>7} {'MRR':>7} {'ROUGE-L':>9}")
+        print("-" * 50)
+        for tool, s in sorted(tool_stats.items()):
+            c = s["count"]
+            print(
+                f"{tool:<12} {c:>4} "
+                f"{s['h1']/c:>7.3f} {s['h5']/c:>7.3f} "
+                f"{s['mrr']/c:>7.3f} {s['rl']/c:>9.3f}"
+            )
 
-    # Lưu kết quả
-    results = {
-        "total_questions": total,
-        "bm25": {
-            "hit@1": round(bm25_hit1/total, 3),
-            "hit@5": round(bm25_hit5/total, 3),
-            "mrr":   round(bm25_mrr/total, 3),
-        },
+    # ── Per-category ──────────────────────────────────────────
+    if len(cat_stats) > 1:
+        print("\n" + "-" * 65)
+        print("PER-CATEGORY BREAKDOWN")
+        print(f"{'Category':<14} {'N':>4} {'Hit@1':>7} {'MRR':>7} {'ROUGE-L':>9}")
+        print("-" * 46)
+        for cat, s in sorted(cat_stats.items()):
+            c = s["count"]
+            print(
+                f"{cat:<14} {c:>4} "
+                f"{s['h1']/c:>7.3f} {s['mrr']/c:>7.3f} "
+                f"{s['rl']/c:>9.3f}"
+            )
+
+    print("=" * 65)
+
+    # ── Save ──────────────────────────────────────────────────
+    results: dict = {
+        "run_id":           run_id,
+        "total_questions":  n,
         "agent": {
-            "hit@1": round(agent_hit1/total, 3),
-            "hit@5": round(agent_hit5/total, 3),
-            "mrr":   round(agent_mrr/total, 3),
+            "hit@1":   round(ag_h1/n,  3),
+            "hit@5":   round(ag_h5/n,  3),
+            "mrr":     round(ag_mrr/n, 3),
+            "rouge_l": round(ag_rl/n,  3),
+        },
+        "per_tool": {
+            tool: {
+                "count":   s["count"],
+                "hit@1":   round(s["h1"]  / s["count"], 3),
+                "hit@5":   round(s["h5"]  / s["count"], 3),
+                "mrr":     round(s["mrr"] / s["count"], 3),
+                "rouge_l": round(s["rl"]  / s["count"], 3),
+            }
+            for tool, s in tool_stats.items()
+        },
+        "per_category": {
+            cat: {
+                "count":   s["count"],
+                "hit@1":   round(s["h1"]  / s["count"], 3),
+                "mrr":     round(s["mrr"] / s["count"], 3),
+                "rouge_l": round(s["rl"]  / s["count"], 3),
+            }
+            for cat, s in cat_stats.items()
         },
     }
-    Path("data/eval_results.json").write_text(
-        json.dumps(results, indent=2), encoding="utf-8"
-    )
-    print(f"\nResults saved to data/eval_results.json")
+    if bm25_available:
+        results["bm25"] = {
+            "hit@1": round(bm25_h1/n,  3),
+            "hit@5": round(bm25_h5/n,  3),
+            "mrr":   round(bm25_mrr/n, 3),
+        }
+
+    out = Path("data/eval_results.json")
+    out.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"\nSaved -> {out}")
 
 
 if __name__ == "__main__":

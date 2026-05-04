@@ -37,8 +37,10 @@ def get_graph_data() -> tuple[dict, list]:
         )
         node_mapping = {r["node_id"]: r["name"] for r in nodes}
 
+        # Undirected: fetch both directions then dedupe (min,max) pairs
         edges = session.run("""
-            MATCH (a:Entity)-[r]->(b:Entity)
+            MATCH (a:Entity)-[r]-(b:Entity)
+            WHERE elementId(a) < elementId(b)
             RETURN elementId(a) AS src, elementId(b) AS tgt
         """)
         edge_list = [(r["src"], r["tgt"]) for r in edges]
@@ -78,7 +80,7 @@ def detect_communities(
 
     # Chạy Leiden
     logger.info("Chạy Leiden algorithm...")
-    partition = leiden(edges, trials=3)
+    partition = leiden(edges, trials=10)
 
     # Group nodes theo community
     communities: dict[int, list[str]] = {}
@@ -107,8 +109,8 @@ def detect_communities(
 def save_communities(communities: dict[int, list[str]]):
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    # Convert key sang string cho JSON
-    data = {str(k): v for k, v in communities.items()}
+    # Lưu cùng format mà summarizer.py và agent đọc: {id: {"nodes": [...], "summary": ""}}
+    data = {str(k): {"nodes": v, "summary": ""} for k, v in communities.items()}
     OUTPUT_FILE.write_text(
         json.dumps(data, ensure_ascii=False, indent=2),
         encoding="utf-8",

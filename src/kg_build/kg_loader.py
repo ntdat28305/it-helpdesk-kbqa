@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -37,17 +38,37 @@ def get_driver():
     driver = GraphDatabase.driver(uri, auth=(username, password))
     driver.verify_connectivity()
     logger.info("Kết nối Neo4j thành công")
+    _ensure_schema(driver)
     return driver
+
+
+def _ensure_schema(driver):
+    """Tạo constraints và indexes nếu chưa tồn tại."""
+    with driver.session() as session:
+        session.run(
+            "CREATE CONSTRAINT entity_name IF NOT EXISTS "
+            "FOR (e:Entity) REQUIRE e.name IS UNIQUE"
+        )
+        session.run(
+            "CREATE CONSTRAINT article_id IF NOT EXISTS "
+            "FOR (a:Article) REQUIRE a.article_id IS UNIQUE"
+        )
+        session.run(
+            "CREATE FULLTEXT INDEX entity_name_ft IF NOT EXISTS "
+            "FOR (e:Entity) ON EACH [e.name]"
+        )
+    logger.info("Schema (constraints + indexes) đã sẵn sàng")
 
 
 # ── Load một file vào Neo4j ───────────────────────────────────
 
-def load_file(session, data: dict) -> tuple[int, int]:
-    """
-    Load entities và relations từ một file vào Neo4j.
-    Dùng MERGE để tránh trùng lặp.
-    Trả về (số entities, số relations) đã load.
-    """
+def _normalize_name(name: str) -> str:
+    """Normalize entity name: strip + collapse whitespace để tránh duplicate."""
+    return " ".join(name.strip().split())
+
+
+def _load_file_tx(tx, data: dict) -> tuple[int, int]:
+    """Transaction function — được gọi trong execute_write để đảm bảo atomicity."""
     metadata  = data.get("metadata", {})
     entities  = data.get("entities", [])
     relations = data.get("relations", [])
@@ -58,54 +79,68 @@ def load_file(session, data: dict) -> tuple[int, int]:
     category   = metadata.get("category", "")
 
     # Tạo Article node
-    session.run("""
+    tx.run("""
         MERGE (a:Article {article_id: $article_id})
         SET a.title    = $title,
             a.url      = $url,
             a.category = $category
     """, article_id=article_id, title=title, url=url, category=category)
 
-    # Tạo Entity nodes
-    entity_count = 0
-    for ent in entities:
-        name = ent.get("name", "").strip()
-        etype = ent.get("type", "Concept").strip()
-        if not name:
-            continue
-        session.run("""
-            MERGE (e:Entity {name: $name})
-            SET e.type = $type
-        """, name=name, type=etype)
-
-        # Link entity với article
-        session.run("""
+    # Batch UNWIND: 1 query cho toàn bộ entities + MENTIONS links
+    valid_entities = [
+        {"name": _normalize_name(e.get("name", "")), "type": e.get("type", "Concept").strip()}
+        for e in entities
+        if e.get("name", "").strip()
+    ]
+    if valid_entities:
+        tx.run("""
+            UNWIND $entities AS ent
+            MERGE (e:Entity {name: ent.name})
+            SET e.type = ent.type
+            WITH e, ent
             MATCH (a:Article {article_id: $article_id})
-            MATCH (e:Entity {name: $name})
             MERGE (a)-[:MENTIONS]->(e)
-        """, article_id=article_id, name=name)
+        """, entities=valid_entities, article_id=article_id)
 
-        entity_count += 1
+    entity_count = len(valid_entities)
 
     # Tạo Relations
     relation_count = 0
     for rel in relations:
-        source   = rel.get("source", "").strip()
+        source   = _normalize_name(rel.get("source", ""))
         relation = rel.get("relation", "RELATED_TO").strip().upper()
-        target   = rel.get("target", "").strip()
+        target   = _normalize_name(rel.get("target", ""))
 
         if not source or not target:
             continue
 
+        # Chỉ cho phép relation type hợp lệ (tránh Cypher injection)
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", relation):
+            logger.warning(f"Relation type không hợp lệ '{relation}', dùng RELATED_TO")
+            relation = "RELATED_TO"
+
         # Chỉ tạo relation nếu cả 2 entity đã tồn tại
-        session.run(f"""
+        result = tx.run(f"""
             MATCH (a:Entity {{name: $source}})
             MATCH (b:Entity {{name: $target}})
             MERGE (a)-[:{relation}]->(b)
+            RETURN 1 AS created
         """, source=source, target=target)
+        if not result.single():
+            logger.warning(f"Relation bỏ qua (entity không tìm thấy): '{source}' -[{relation}]-> '{target}'")
+            continue
 
         relation_count += 1
 
     return entity_count, relation_count
+
+
+def load_file(session, data: dict) -> tuple[int, int]:
+    """
+    Load entities và relations từ một file vào Neo4j trong 1 atomic transaction.
+    Trả về (số entities, số relations) đã load.
+    """
+    return session.execute_write(_load_file_tx, data)
 
 
 # ── Pipeline ──────────────────────────────────────────────────

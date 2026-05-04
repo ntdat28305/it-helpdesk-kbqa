@@ -13,11 +13,11 @@ Microsoft Learn Docs
         ↓ GCN Embedding
   models/embeddings/
         ↓
-  ReAct Agent (4 tools)
-  ├── CYPHER      → exact entity search
-  ├── EMBEDDING   → semantic similarity
-  ├── BFS         → multi-hop reasoning
-  └── WEBSEARCH   → web fallback
+  ReAct Agent via Groq function-calling (4 tools)
+  ├── CYPHER      → exact entity search in KG
+  ├── EMBEDDING   → GCN semantic similarity
+  ├── BFS         → multi-hop path reasoning
+  └── WEBSEARCH   → Tavily web fallback
         ↓
   FastAPI REST API → Streamlit UI
 ```
@@ -48,12 +48,16 @@ pip install -r requirements.txt
 ```bash
 cp .env.example .env
 # Điền các giá trị vào .env:
-# GROQ_API_KEY_1=...
-# NEO4J_URI=neo4j+s://...
+# GROQ_API_KEY_1=...          (bắt buộc — lấy tại console.groq.com)
+# NEO4J_URI=neo4j+s://...     (AuraDB free tier — console.neo4j.io)
 # NEO4J_USERNAME=neo4j
 # NEO4J_PASSWORD=...
-# TAVILY_API_KEY=...
+# TAVILY_API_KEY=...           (lấy tại app.tavily.com)
 ```
+
+> **Lưu ý quan trọng:** Neo4j AuraDB phải được tạo trước và `data/communities.json` +
+> `data/community_summaries.json` + `models/` phải tồn tại trước khi chạy API.
+> Xem phần **Data Pipeline** và **Training** bên dưới nếu cần khởi tạo từ đầu.
 
 ## Data Pipeline
 
@@ -186,14 +190,14 @@ Kết quả so sánh Agent vs BM25 baseline:
 | Hit@5  | 0.260 | 0.260 | +0.0%       |
 | MRR    | 0.115 | 0.217 | +87.9%      |
 
-Agent vượt BM25 ở Hit@1 (+200%) và MRR (+87.9%) trên natural language test set.
+Agent vượt BM25 ở Hit@1 (+0.12 absolute) và MRR (+0.10 absolute) trên natural language test set (n=50).
 
 ## Cấu trúc thư mục
 
 ```
 it-helpdesk-kbqa/
 ├── src/
-│   ├── ingestion/          # scraper.py, cleaner.py
+│   ├── ingestion/          # scraper.py
 │   ├── kg_build/           # entity_extractor.py, kg_loader.py, community.py, summarizer.py
 │   ├── embedding/          # train_gcn.py
 │   ├── agent/              # agent.py, neo4j_query.py, prompts.py
@@ -218,8 +222,10 @@ it-helpdesk-kbqa/
 │   └── evaluate.py
 ├── tests/
 ├── docker-compose.yml
-├── Dockerfile
+├── Dockerfile.api
+├── Dockerfile.ui
 ├── requirements.txt
+├── requirements-ui.txt
 ├── .env.example
 └── README.md
 ```
