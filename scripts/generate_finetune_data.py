@@ -79,7 +79,7 @@ def get_kg_pairs() -> list[dict]:
     try:
         with driver.session() as session:
             results = session.run(
-                "MATCH (e:Entity)-[:MENTIONS]->(a:Article) "
+                "MATCH (a:Article)-[:MENTIONS]->(e:Entity) "
                 "RETURN e.name AS entity, a.url AS url LIMIT 500"
             )
             pairs = [{"entity": r["entity"], "url": r["url"]} for r in results]
