@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import os
-from pyexpat import features
 import random
 from pathlib import Path
 
@@ -22,9 +21,9 @@ from dotenv import load_dotenv
 from neo4j import GraphDatabase
 from torch_geometric.data import Data
 from torch_geometric.nn import GCNConv
+from torch_geometric.utils import negative_sampling
 
 from src.utils.logger import get_logger
-from sentence_transformers import SentenceTransformer
 
 load_dotenv()
 logger = get_logger(__name__, log_file="logs/train_gcn.log")
@@ -82,9 +81,12 @@ def prepare_data(
 
     # Random features thay vì one-hot — tránh overfitting
     logger.info("Encoding node names bằng sentence-transformers...")
-    st_model  = SentenceTransformer("all-MiniLM-L6-v2")
+    _retriever_path = Path("models/retriever")
+    _model_name = str(_retriever_path) if _retriever_path.exists() else "all-MiniLM-L6-v2"
+    logger.info(f"Dùng model: {_model_name}")
+    st_model   = SentenceTransformer(_model_name)
     node_names = [node_mapping[nid] for nid in node_ids]
-    embeddings = st_model.encode(node_names, show_progress_bar=True)
+    embeddings = st_model.encode(node_names, show_progress_bar=True, normalize_embeddings=True)
     features   = torch.tensor(embeddings, dtype=torch.float)
     logger.info(f"Features shape: {features.shape}")
 
@@ -178,17 +180,15 @@ def train(
         optimizer.zero_grad()
         z, recon_pos = model(train_data.x, train_data.edge_index)
 
-# Tạo negative edges ngẫu nhiên
+        # Negative sampling tránh trùng positive edges
         num_nodes = train_data.x.size(0)
-        num_neg   = train_data.edge_index.size(1)
-        neg_src   = torch.randint(0, num_nodes, (num_neg,))
-        neg_tgt   = torch.randint(0, num_nodes, (num_neg,))
-        neg_edge  = torch.stack([neg_src, neg_tgt])
-
-# Decode negative edges
+        neg_edge  = negative_sampling(
+            edge_index=train_data.edge_index,
+            num_nodes=num_nodes,
+            num_neg_samples=train_data.edge_index.size(1),
+        )
         neg_recon = model.decode(z, neg_edge)
 
-# Loss: positive=1, negative=0
         pos_loss = criterion(recon_pos, torch.ones(recon_pos.size(0)))
         neg_loss = criterion(neg_recon, torch.zeros(neg_recon.size(0)))
         loss     = pos_loss + neg_loss
@@ -196,17 +196,17 @@ def train(
         loss.backward()
         optimizer.step()
 
-        # Validate
-        # Validate
+        # Validate: encode với train edges, decode trên val edges (tránh data leak)
         model.eval()
         with torch.no_grad():
-            z_val, val_recon_pos = model(train_data.x, val_data.edge_index)
+            z_val = model.encode(train_data.x, train_data.edge_index)
+            val_recon_pos = model.decode(z_val, val_data.edge_index)
 
-    # Negative edges cho val
-            num_neg_val = val_data.edge_index.size(1)
-            neg_src_val = torch.randint(0, num_nodes, (num_neg_val,))
-            neg_tgt_val = torch.randint(0, num_nodes, (num_neg_val,))
-            neg_edge_val = torch.stack([neg_src_val, neg_tgt_val])
+            neg_edge_val = negative_sampling(
+                edge_index=train_data.edge_index,
+                num_nodes=num_nodes,
+                num_neg_samples=val_data.edge_index.size(1),
+            )
             val_recon_neg = model.decode(z_val, neg_edge_val)
 
             val_loss = (
@@ -247,12 +247,19 @@ def train(
 
 # ── Lưu kết quả ──────────────────────────────────────────────
 
-def save_results(model, embeddings, idx2name, name2idx):
+def save_results(model, embeddings, idx2name, name2idx, node_features: np.ndarray | None = None):
     EMBEDDING_DIR.mkdir(parents=True, exist_ok=True)
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
 
     emb_np = embeddings.detach().numpy()
     np.save(EMBEDDING_DIR / "node_embeddings.npy", emb_np)
+
+    if node_features is not None:
+        # L2-normalize để dot product = cosine similarity lúc query
+        norms = np.linalg.norm(node_features, axis=1, keepdims=True) + 1e-8
+        sem_emb = node_features / norms
+        np.save(EMBEDDING_DIR / "node_semantic_embeddings.npy", sem_emb)
+        logger.info(f"Saved semantic embeddings: {sem_emb.shape}")
 
     (EMBEDDING_DIR / "idx_to_name.json").write_text(
         json.dumps(idx2name, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -273,7 +280,8 @@ def run():
     node_mapping, edge_list = get_graph_data()
     train_data, val_data, idx2name, name2idx = prepare_data(node_mapping, edge_list)
     model, embeddings = train(train_data, val_data)
-    save_results(model, embeddings, idx2name, name2idx)
+    node_features = train_data.x.numpy()
+    save_results(model, embeddings, idx2name, name2idx, node_features=node_features)
     logger.info("=== Train GCN xong ===")
 
 
