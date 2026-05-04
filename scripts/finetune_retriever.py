@@ -123,16 +123,19 @@ def main():
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    model.fit(
+    fit_kwargs: dict = dict(
         train_objectives=[(train_dataloader, train_loss)],
         epochs=EPOCHS,
         warmup_steps=warmup_steps,
-        evaluator=evaluator,
-        evaluation_steps=len(train_dataloader),
         output_path=str(OUTPUT_DIR),
         show_progress_bar=True,
-        save_best_model=True,
     )
+    if evaluator is not None:
+        fit_kwargs["evaluator"]        = evaluator
+        fit_kwargs["evaluation_steps"] = len(train_dataloader)
+        fit_kwargs["save_best_model"]  = True
+
+    model.fit(**fit_kwargs)
 
     print(f"\nModel saved -> {OUTPUT_DIR}")
 
