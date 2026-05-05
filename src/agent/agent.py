@@ -695,6 +695,7 @@ class ITHelpdeskAgent:
         if len(self.history) > MAX_HISTORY_MESSAGES:
             self.history = self.history[-MAX_HISTORY_MESSAGES:]
 
+        logger.info(f"Confidence: {result['confidence']} | Reason: {result['reflection_reason'][:80]}")
         logger.info(f"Answer: {result['answer'][:100]}...")
         return result
 
