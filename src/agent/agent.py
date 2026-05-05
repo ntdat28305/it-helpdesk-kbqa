@@ -369,7 +369,7 @@ class ITHelpdeskAgent:
             if not raw:
                 return _default
             # Strip markdown fences if present
-            raw = raw.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
+            raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
             parsed = json.loads(raw)
             return {
                 "is_sufficient": bool(parsed.get("is_sufficient", True)),
