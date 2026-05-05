@@ -330,6 +330,20 @@ class ITHelpdeskAgent:
         logger.info(f"Topic change: '{prev_question[:40]}' → '{question[:40]}' = {changed}")
         return changed
 
+    def _plan(self, question: str) -> str:
+        """Generate a lightweight planning note before the ReAct loop."""
+        try:
+            note = llm_call(
+                self.client,
+                PLAN_PROMPT.format(question=question),
+                max_tokens=80,
+            )
+            result = (note or "").strip()
+            logger.info(f"Plan: {result[:100]}")
+            return result
+        except Exception:
+            return ""
+
     def _execute_tool(
         self, fn_name: str, args: dict
     ) -> tuple[str, list[str], str]:
