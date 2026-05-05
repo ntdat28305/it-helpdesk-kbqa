@@ -451,11 +451,16 @@ class ITHelpdeskAgent:
         return "Unknown tool.", [], ""
 
     def _react_loop(
-        self, question: str, history_context: list[dict]
+        self, question: str, history_context: list[dict], plan_note: str = ""
     ) -> dict:
         """Run Thought→Action→Observation loop via Groq function calling."""
+        system_content = (
+            SYSTEM_PROMPT + f"\n\n[Planning note: {plan_note}]"
+            if plan_note
+            else SYSTEM_PROMPT
+        )
         messages: list[dict] = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_content},
             *history_context,
             {"role": "user", "content": question},
         ]
@@ -467,6 +472,8 @@ class ITHelpdeskAgent:
         steps:   list[dict]     = []
         answer_text  = ""
         global_step  = 0  # increments per tool call, not per LLM turn
+
+        used_tool_inputs: set[tuple] = set()
 
         first_tool = _forced_tool(question)
 
@@ -496,6 +503,14 @@ class ITHelpdeskAgent:
 
             if not msg.tool_calls:
                 answer_text = (msg.content or "").strip()
+                if answer_text:
+                    global_step += 1
+                    steps.append({
+                        "step":        global_step,
+                        "tool":        "thought",
+                        "input":       "",
+                        "observation": answer_text[:300],
+                    })
                 logger.info(f"Final answer at step {step + 1}")
                 break
 
@@ -524,7 +539,17 @@ class ITHelpdeskAgent:
                     args = {}
 
                 logger.info(f"Tool call: {fn_name}({args})")
-                obs, step_sources, step_entity = self._execute_tool(fn_name, args)
+                _dedup_key = (fn_name, json.dumps(args, sort_keys=True))
+                if _dedup_key in used_tool_inputs:
+                    obs, step_sources, step_entity = (
+                        "[Skipped: same tool+input already used in this query]",
+                        [],
+                        "",
+                    )
+                    logger.info("Tool dedup: skipped duplicate call")
+                else:
+                    used_tool_inputs.add(_dedup_key)
+                    obs, step_sources, step_entity = self._execute_tool(fn_name, args)
 
                 tool_used = _TOOL_NAME_MAP.get(fn_name, "WEBSEARCH")
                 if step_entity:
@@ -606,13 +631,14 @@ class ITHelpdeskAgent:
         context = "\n\n---\n\n".join(context_parts) if context_parts else "No relevant information found."
 
         return {
-            "question":  question,
-            "tool_used": tool_used,
-            "entity":    entity,
-            "answer":    answer_text,
-            "sources":   sources,
-            "context":   context,
-            "steps":     steps,
+            "question":     question,
+            "tool_used":    tool_used,
+            "entity":       entity,
+            "answer":       answer_text,
+            "sources":      sources,
+            "context":      context,
+            "steps":        steps,
+            "observations": observations,
         }
 
     def answer(self, question: str) -> dict:
