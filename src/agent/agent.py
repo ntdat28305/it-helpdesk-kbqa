@@ -663,7 +663,30 @@ class ITHelpdeskAgent:
                 self.reset_history()
 
         history_context = self.history[-10:] if self.history else []
-        result = self._react_loop(question, history_context)
+        plan_note = self._plan(question)
+        result = self._react_loop(question, history_context, plan_note)
+
+        reflection = self._reflect(
+            question,
+            result["answer"],
+            len(result["sources"]),
+            result["tool_used"],
+        )
+        if not reflection["is_sufficient"] and result.get("observations"):
+            synthesis = "\n\n---\n\n".join(result["observations"])
+            new_answer = llm_call(
+                self.client,
+                f"Based on the findings below, give a concise actionable answer.\n\n"
+                f"Question: {question}\n\nFindings:\n{synthesis}",
+                max_tokens=512,
+            )
+            if new_answer:
+                result["answer"] = new_answer
+                logger.info("Reflection triggered re-synthesis")
+
+        result["plan_note"]         = plan_note
+        result["confidence"]        = reflection["confidence"]
+        result["reflection_reason"] = reflection["reason"]
 
         self.history.append({"role": "user",      "content": question})
         self.history.append({"role": "assistant",  "content": result["answer"]})
