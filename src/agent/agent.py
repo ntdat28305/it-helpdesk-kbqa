@@ -683,6 +683,8 @@ class ITHelpdeskAgent:
             if new_answer:
                 result["answer"] = new_answer
                 logger.info("Reflection triggered re-synthesis")
+            else:
+                logger.warning("Re-synthesis returned None; keeping original answer")
 
         result["plan_note"]         = plan_note
         result["confidence"]        = reflection["confidence"]

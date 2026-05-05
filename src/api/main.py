@@ -71,6 +71,9 @@ class QueryResponse(BaseModel):
     sources: list[str]
     session_id: str
     steps: list[dict] = []
+    plan_note: str = ""
+    confidence: str = "medium"
+    reflection_reason: str = ""
 
 
 # ── Session management ────────────────────────────────────────
