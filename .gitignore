@@ -28,3 +28,4 @@ __pycache__/
 CLAUDE.md
 .claude/
 .agent/
+.streamlit/
