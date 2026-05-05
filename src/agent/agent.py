@@ -454,9 +454,10 @@ class ITHelpdeskAgent:
         self, question: str, history_context: list[dict], plan_note: str = ""
     ) -> dict:
         """Run Thought→Action→Observation loop via Groq function calling."""
+        _plan_note = plan_note.strip()
         system_content = (
-            SYSTEM_PROMPT + f"\n\n[Planning note: {plan_note}]"
-            if plan_note
+            SYSTEM_PROMPT + f"\n\n[Planning note: {_plan_note}]"
+            if _plan_note
             else SYSTEM_PROMPT
         )
         messages: list[dict] = [
@@ -471,7 +472,7 @@ class ITHelpdeskAgent:
         observations: list[str] = []
         steps:   list[dict]     = []
         answer_text  = ""
-        global_step  = 0  # increments per tool call, not per LLM turn
+        global_step  = 0  # increments per tool call or thought step
 
         used_tool_inputs: set[tuple] = set()
 
