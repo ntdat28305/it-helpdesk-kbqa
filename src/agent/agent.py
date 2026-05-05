@@ -344,6 +344,42 @@ class ITHelpdeskAgent:
         except Exception:
             return ""
 
+    def _reflect(
+        self,
+        question: str,
+        answer_text: str,
+        num_sources: int,
+        tool_used: str,
+    ) -> dict:
+        """Self-evaluate the generated answer; return confidence metadata."""
+        _default = {"is_sufficient": True, "confidence": "medium", "reason": ""}
+        if not answer_text:
+            return {"is_sufficient": False, "confidence": "low", "reason": "Empty answer"}
+        try:
+            raw = llm_call(
+                self.client,
+                REFLECT_PROMPT.format(
+                    question=question,
+                    answer=answer_text[:600],
+                    num_sources=num_sources,
+                    tools_used=tool_used,
+                ),
+                max_tokens=80,
+            )
+            if not raw:
+                return _default
+            # Strip markdown fences if present
+            raw = raw.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
+            parsed = json.loads(raw)
+            return {
+                "is_sufficient": bool(parsed.get("is_sufficient", True)),
+                "confidence":    str(parsed.get("confidence", "medium")),
+                "reason":        str(parsed.get("reason", "")),
+            }
+        except Exception as e:
+            logger.warning(f"Reflection parse error: {e}")
+            return _default
+
     def _execute_tool(
         self, fn_name: str, args: dict
     ) -> tuple[str, list[str], str]:
