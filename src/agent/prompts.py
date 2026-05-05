@@ -99,3 +99,32 @@ Previous: {prev}
 Current: {current}
 
 Reply ONLY yes or no."""
+
+
+# ── Prompt planning (lightweight thinking note) ───────────────
+
+PLAN_PROMPT = """You are an IT helpdesk assistant. Briefly analyze what the user needs.
+In 1-2 sentences, describe: what type of problem this is and what information would best answer it.
+Be concise — this is an internal thinking note, not shown to the user.
+
+Question: {question}
+Plan:"""
+
+
+# ── Prompt reflection (self-evaluation) ──────────────────────
+
+REFLECT_PROMPT = """Evaluate this IT helpdesk answer.
+
+Question: {question}
+Answer: {answer}
+Sources used: {num_sources} source(s), tools: {tools_used}
+
+Reply with ONLY valid JSON, no markdown:
+{{"is_sufficient": true, "confidence": "high", "reason": "one sentence"}}
+
+Confidence criteria:
+- "high": clear, actionable answer with specific steps and sources
+- "medium": partial info, generic steps, or only 1 weak source
+- "low": no sources, vague answer, or answer does not address the question
+
+is_sufficient: false only when the answer is completely off-topic or empty."""
