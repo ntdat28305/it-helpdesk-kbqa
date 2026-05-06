@@ -14,11 +14,14 @@ from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.agent.agent import ITHelpdeskAgent
 from src.agent.neo4j_query import close_driver
 from src.utils.logger import get_logger
+
+from uuid import uuid4
+import asyncio
 
 load_dotenv()
 logger = get_logger(__name__, log_file="logs/api.log")
@@ -52,7 +55,7 @@ app.add_middleware(
 
 class QueryRequest(BaseModel):
     question: str
-    session_id: Optional[str] = "default"
+    session_id: str = Field(default_factory=lambda: str(uuid4()))
 
     class Config:
         json_schema_extra = {
@@ -81,19 +84,17 @@ class QueryResponse(BaseModel):
 MAX_SESSIONS = 500
 sessions: OrderedDict[str, ITHelpdeskAgent] = OrderedDict()
 
-
-def get_or_create_session(session_id: str) -> ITHelpdeskAgent:
-    """Lấy hoặc tạo agent cho session. Evict session cũ nhất nếu vượt MAX_SESSIONS."""
-    if session_id in sessions:
-        sessions.move_to_end(session_id)
+_session_lock = asyncio.Lock()
+async def get_or_create_session(session_id: str) -> ITHelpdeskAgent:
+    async with _session_lock:
+        if session_id in sessions:
+            sessions.move_to_end(session_id)
+            return sessions[session_id]
+        if len(sessions) >= MAX_SESSIONS:
+            oldest = next(iter(sessions))
+            del sessions[oldest]
+        sessions[session_id] = ITHelpdeskAgent()
         return sessions[session_id]
-    if len(sessions) >= MAX_SESSIONS:
-        oldest = next(iter(sessions))
-        del sessions[oldest]
-        logger.info(f"Evicted oldest session: {oldest}")
-    sessions[session_id] = ITHelpdeskAgent()
-    logger.info(f"New session: {session_id}")
-    return sessions[session_id]
 
 
 # ── Endpoints ─────────────────────────────────────────────────
@@ -119,7 +120,7 @@ async def query(request: QueryRequest):
         raise HTTPException(status_code=400, detail="Question không được rỗng")
 
     try:
-        session_agent = get_or_create_session(request.session_id)
+        session_agent = await get_or_create_session(request.session_id)
         result = session_agent.answer(request.question)
 
         return QueryResponse(
@@ -130,6 +131,9 @@ async def query(request: QueryRequest):
             sources=result["sources"],
             session_id=request.session_id,
             steps=result.get("steps", []),
+            plan_note=result.get("plan_note", ""),
+            confidence=result.get("confidence", "medium"),
+            reflection_reason=result.get("reflection_reason", ""),
         )
 
     except Exception as e:

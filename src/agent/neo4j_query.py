@@ -47,25 +47,26 @@ def cypher_search(entity_name: str) -> dict:
 
     driver = get_driver()
     results = {"entity": entity_name, "relations": [], "articles": []}
-
-    with driver.session() as session:
-        rows = session.run("""
-            MATCH (e:Entity)
-            WHERE toLower(e.name) CONTAINS $name
-            WITH e
-            OPTIONAL MATCH (e)-[r]-(e2:Entity)
-            OPTIONAL MATCH (a:Article)-[:MENTIONS]->(e)
-            RETURN
-              collect(DISTINCT CASE WHEN r IS NOT NULL
-                THEN {src: e.name, rel: type(r), tgt: e2.name} END)[..20] AS relations,
-              collect(DISTINCT CASE WHEN a IS NOT NULL
-                THEN {title: a.title, url: a.url} END)[..5]  AS articles
-        """, name=name_norm)
-        row = rows.single()
-        if row:
-            results["relations"] = [x for x in (row["relations"] or []) if x]
-            results["articles"]  = [x for x in (row["articles"]  or []) if x]
-
+    try:
+        with driver.session() as session:
+            rows = session.run("""
+                MATCH (e:Entity)
+                WHERE toLower(e.name) CONTAINS $name
+                WITH e
+                OPTIONAL MATCH (e)-[r]-(e2:Entity)
+                OPTIONAL MATCH (a:Article)-[:MENTIONS]->(e)
+                RETURN
+                collect(DISTINCT CASE WHEN r IS NOT NULL
+                    THEN {src: e.name, rel: type(r), tgt: e2.name} END)[..20] AS relations,
+                collect(DISTINCT CASE WHEN a IS NOT NULL
+                    THEN {title: a.title, url: a.url} END)[..5]  AS articles
+            """, name=name_norm)
+            row = rows.single()
+            if row:
+                results["relations"] = [x for x in (row["relations"] or []) if x]
+                results["articles"]  = [x for x in (row["articles"]  or []) if x]
+    except Exception as e:
+        logger.error(f"Neo4j cypher_search error: {e}")
     return results
 
 
@@ -96,37 +97,40 @@ def bfs_search(entity1: str, entity2: str) -> dict:
         LIMIT 1
     """
 
-    with driver.session() as session:
-        n1 = session.run(resolve_query, name=entity1).single()
-        n2 = session.run(resolve_query, name=entity2).single()
+    try:
+        with driver.session() as session:
+            n1 = session.run(resolve_query, name=entity1).single()
+            n2 = session.run(resolve_query, name=entity2).single()
 
-        if not n1 or not n2:
-            logger.warning(f"Không tìm thấy node: {entity1} hoặc {entity2}")
-            return results
+            if not n1 or not n2:
+                logger.warning(f"Không tìm thấy node: {entity1} hoặc {entity2}")
+                return results
 
-        name1 = n1["name"]
-        name2 = n2["name"]
-        logger.info(f"BFS: '{entity1}' → '{name1}' | '{entity2}' → '{name2}'")
+            name1 = n1["name"]
+            name2 = n2["name"]
+            logger.info(f"BFS: '{entity1}' → '{name1}' | '{entity2}' → '{name2}'")
 
-        if name1 == name2:
-            logger.warning(f"BFS: cả 2 entity resolve về cùng node '{name1}', bỏ qua")
-            return results
+            if name1 == name2:
+                logger.warning(f"BFS: cả 2 entity resolve về cùng node '{name1}', bỏ qua")
+                return results
 
-        path = session.run("""
-            MATCH (a:Entity {name: $n1}), (b:Entity {name: $n2})
-            MATCH p = allShortestPaths((a)-[*..4]-(b))
-            RETURN [n in nodes(p) | n.name] AS path_nodes,
-                   length(p) AS path_length
-            LIMIT 3
-        """, n1=name1, n2=name2)
+            path = session.run("""
+                MATCH (a:Entity {name: $n1}), (b:Entity {name: $n2})
+                MATCH p = allShortestPaths((a)-[*..4]-(b))
+                RETURN [n in nodes(p) | n.name] AS path_nodes,
+                    length(p) AS path_length
+                LIMIT 3
+            """, n1=name1, n2=name2)
 
-        for r in path:
-            clean_nodes = [n for n in r["path_nodes"] if n is not None]
-            if clean_nodes:
-                results["path"].append({
-                    "nodes": clean_nodes,
-                    "length": r["path_length"],
-                })
+            for r in path:
+                clean_nodes = [n for n in r["path_nodes"] if n is not None]
+                if clean_nodes:
+                    results["path"].append({
+                        "nodes": clean_nodes,
+                        "length": r["path_length"],
+                    })
+    except Exception as e:
+        logger.error(f"Neo4j bfs_search error: {e}")
     return results
 
 

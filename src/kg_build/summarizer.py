@@ -84,7 +84,7 @@ def run(limit: int | None = None, dry_run: bool = False):
 
     # Chuẩn hoá: hỗ trợ cả format cũ {id: [nodes]} lẫn mới {id: {"nodes": [...]}}
     communities = {
-        k: (v if isinstance(v, dict) else {"nodes": v, "summary": ""})
+        k: (v if isinstance(v, dict) and "nodes" in v else {"nodes": v if isinstance(v, list) else [], "summary": ""})
         for k, v in communities.items()
     }
 

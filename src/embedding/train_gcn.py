@@ -35,6 +35,9 @@ CHECKPOINT_DIR = Path("models/gcn_checkpoint")
 torch.manual_seed(42)
 random.seed(42)
 np.random.seed(42)
+if torch.cuda.is_available():
+    torch.cuda.manual_seed_all(42)
+    torch.backends.cudnn.deterministic = True
 
 
 # ── Lấy data từ Neo4j ────────────────────────────────────────

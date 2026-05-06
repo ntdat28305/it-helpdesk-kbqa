@@ -42,7 +42,8 @@ _RE_ERROR_CODE = re.compile(
     re.IGNORECASE,
 )
 _RE_WEBSEARCH = re.compile(
-    r'\b(latest|recent|newest|version \d|24H2|23H2|2024|2025|this (month|week|year))\b',
+    r'\b(latest|newest|recent|update|patch|release|version)\b.*\b(24H2|23H2|2[0-9]{3})\b'
+    r'|\b(24H2|23H2)\b',  # Windows build codes thì ok match thẳng
     re.IGNORECASE,
 )
 _RE_FOLLOWUP = re.compile(
@@ -224,17 +225,22 @@ def load_resources() -> dict:
 
 # ── Groq plain LLM call (used for pre-processing checks) ─────
 
+_MODEL_FAST = "llama-3.1-8b-instant"
+_MODEL_STRONG = "llama-3.3-70b-versatile"
+
+
 def llm_call(
     client: Groq,
     prompt: str,
     max_tokens: int = 512,
     history: list[dict] | None = None,
+    model: str = _MODEL_FAST,
 ) -> str:
     try:
         messages = history.copy() if history else []
         messages.append({"role": "user", "content": prompt})
         resp = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=model,
             messages=messages,
             temperature=0,
             max_tokens=max_tokens,
@@ -352,7 +358,7 @@ class ITHelpdeskAgent:
         tool_used: str,
     ) -> dict:
         """Self-evaluate the generated answer; return confidence metadata."""
-        _default = {"is_sufficient": True, "confidence": "medium", "reason": ""}
+        _default = {"is_sufficient": False, "confidence": "medium", "reason": "Reflection parse failed"}
         if not answer_text:
             return {"is_sufficient": False, "confidence": "low", "reason": "Empty answer"}
         try:
@@ -365,6 +371,7 @@ class ITHelpdeskAgent:
                     tools_used=tool_used,
                 ),
                 max_tokens=80,
+                model=_MODEL_STRONG,
             )
             if not raw:
                 return _default
@@ -488,7 +495,7 @@ class ITHelpdeskAgent:
             )
             try:
                 resp = self.client.chat.completions.create(
-                    model="llama-3.1-8b-instant",
+                    model="llama-3.3-70b-versatile",
                     messages=messages,
                     tools=TOOLS,
                     tool_choice=tool_choice,
@@ -601,6 +608,7 @@ class ITHelpdeskAgent:
                     f"Based on the findings below, give a concise actionable answer.\n\n"
                     f"Question: {question}\n\nFindings:\n{synthesis}",
                     max_tokens=512,
+                    model=_MODEL_STRONG,
                 ) or ""
             if not answer_text:
                 answer_text = (
@@ -645,6 +653,40 @@ class ITHelpdeskAgent:
     def answer(self, question: str) -> dict:
         logger.info(f"Question: {question}")
 
+        # Guard: ambiguous follow-up with no prior context → ask for clarification
+        # Regex is a fast pre-filter; LLM confirms before we reject, because
+        # \bit\b also matches "it" when the question already names a clear subject
+        # (e.g. "my wifi is error, how to fix it?" — NOT ambiguous).
+        if not self.history and _RE_FOLLOWUP.search(question):
+            _amb_check = llm_call(
+                self.client,
+                IS_AMBIGUOUS_PROMPT.format(question=question),
+                max_tokens=5,
+            )
+            _truly_ambiguous = bool(_amb_check) and _amb_check.lower().strip().startswith("yes")
+        else:
+            _truly_ambiguous = False
+
+        if _truly_ambiguous:
+            clarification = (
+                "Could you provide more details? "
+                "For example, what device, error code, or issue are you experiencing?"
+            )
+            logger.info("Ambiguous question with empty history → returning clarification")
+            return {
+                "question":          question,
+                "tool_used":         "",
+                "entity":            "",
+                "answer":            clarification,
+                "sources":           [],
+                "context":           "",
+                "steps":             [],
+                "observations":      [],
+                "plan_note":         "",
+                "confidence":        "low",
+                "reflection_reason": "Ambiguous question with no prior context.",
+            }
+
         # Topic-change + ambiguity pre-processing
         if self.history:
             # Fast regex pre-check: obvious follow-up → skip LLM call
@@ -679,6 +721,7 @@ class ITHelpdeskAgent:
                 f"Based on the findings below, give a concise actionable answer.\n\n"
                 f"Question: {question}\n\nFindings:\n{synthesis}",
                 max_tokens=512,
+                model=_MODEL_STRONG,
             )
             if new_answer:
                 result["answer"] = new_answer
@@ -692,7 +735,7 @@ class ITHelpdeskAgent:
 
         self.history.append({"role": "user",      "content": question})
         self.history.append({"role": "assistant",  "content": result["answer"]})
-        if len(self.history) > MAX_HISTORY_MESSAGES:
+        if len(self.history) >= MAX_HISTORY_MESSAGES:
             self.history = self.history[-MAX_HISTORY_MESSAGES:]
 
         logger.info(f"Confidence: {result['confidence']} | Reason: {result['reflection_reason'][:80]}")

@@ -349,6 +349,13 @@ details.steps-container[open] .steps-chevron {
     transition: all 0.2s ease !important;
 }
 
+/* ── Confidence badge ───────────────────────────────────── */
+.conf-high   { background:rgba(15,45,31,.6);  color:#56d364; border:1px solid rgba(35,134,54,.4); }
+.conf-medium { background:rgba(61,44,0,.6);   color:#f0a800; border:1px solid rgba(158,106,3,.4); }
+.conf-low    { background:rgba(61,17,17,.6);  color:#ff7b72; border:1px solid rgba(163,50,47,.4); }
+.conf-badge  { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:20px; font-size:.7rem; font-weight:600; letter-spacing:.3px; }
+.reflect-bar { font-size:.75rem; color:#8b949e; margin-top:6px; padding:6px 12px; background:rgba(22,27,34,.5); border-left:2px solid rgba(47,129,247,.4); border-radius:0 6px 6px 0; }
+
 /* ── Chat styling ───────────────────────────────────────── */
 [data-testid="stChatMessage"] {
     border-radius: 12px;
@@ -415,72 +422,47 @@ def reset_session():
 
 # ── Render helpers ────────────────────────────────────────────
 def render_steps(steps: list[dict], msg_idx: int = 0):
-    """Render reasoning steps as a collapsible section using HTML5 <details>."""
+    """Collapsible — collapsed shows nothing, expanded shows tool badges only."""
     if not steps:
         return
 
-    # Build step cards HTML
-    step_cards = ""
     tools_used = []
     for s in steps:
         tool = s.get("tool", "")
-        num  = s.get("step", "")
-        inp  = s.get("input", "")
-        obs  = s.get("observation", "")[:300]
         if tool and tool not in tools_used:
             tools_used.append(tool)
 
-        step_cards += (
-            f'<div class="step-card">'
-            f'  <div class="step-num">{num}</div>'
-            f'  <div class="step-tool-line">{tool_badge(tool)}</div>'
-            f'  <div class="step-input"><span class="step-input-arrow">→</span> {inp}</div>'
-            f'  <div class="step-obs">{obs}</div>'
-            f'</div>'
-        )
-
-    # Tool summary pills for the toggle bar
     tool_pills = " ".join(tool_badge(t) for t in tools_used)
-
     st.markdown(
-        f'<details class="steps-container">'
+        f'<details class="steps-container" style="margin-top:10px;">'
         f'  <summary>'
-        f'    <div class="steps-toggle-left">'
-        f'      ⚙ Reasoning Steps'
-        f'    </div>'
-        f'    <div class="steps-toggle-right">'
-        f'      {tool_pills}'
-        f'      <span class="steps-count">{len(steps)} step{"s" if len(steps) > 1 else ""}</span>'
-        f'      <span class="steps-chevron">▶</span>'
-        f'    </div>'
+        f'    <div class="steps-toggle-left">⚙ Reasoning Steps</div>'
+        f'    <span class="steps-chevron">▶</span>'
         f'  </summary>'
-        f'  <div class="steps-inner">'
-        f'    {step_cards}'
-        f'  </div>'
+        f'  <div class="steps-inner" style="padding:10px 14px;">{tool_pills}</div>'
         f'</details>',
         unsafe_allow_html=True,
     )
 
 
-def render_meta(tool: str, entity: str):
-    """Render answer metadata bar (tool + entity)."""
-    if not tool and not entity:
+def render_confidence(confidence: str, reflection: str):
+    """Render confidence badge and optional reflection reason."""
+    if not confidence and not reflection:
         return
-    parts = []
-    if tool:
-        parts.append(tool_badge(tool))
-    if entity:
-        if tool:
-            parts.append('<span class="meta-divider"></span>')
-        parts.append(
-            f'<span class="meta-entity">'
-            f'Entity: <code>{entity}</code>'
-            f'</span>'
-        )
-    st.markdown(
-        f'<div class="meta-bar">{" ".join(parts)}</div>',
-        unsafe_allow_html=True,
+    conf_map = {
+        "high":   ("conf-high",   "▲ High"),
+        "medium": ("conf-medium", "◆ Medium"),
+        "low":    ("conf-low",    "▼ Low"),
+    }
+    cls, label = conf_map.get(confidence.lower(), ("conf-medium", f"◆ {confidence}"))
+    html = (
+        f'<div style="margin-top:8px;">'
+        f'  <span class="conf-badge {cls}">Confidence: {label}</span>'
     )
+    if reflection:
+        html += f'<div class="reflect-bar">💭 {reflection}</div>'
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
 
 
 def render_sources(sources: list[str]):
@@ -488,7 +470,7 @@ def render_sources(sources: list[str]):
     if not sources:
         return
     with st.expander(f"📚 Sources ({len(sources)})", expanded=False):
-        for src in sources[:5]:
+        for src in sources:
             # Extract readable slug from URL
             slug = src.rstrip("/").split("/")[-1].replace("-", " ").title()[:55]
             st.markdown(
@@ -524,47 +506,9 @@ with st.sidebar:
         f'<div class="stat-mono">{sid_short}</div></div>',
         unsafe_allow_html=True,
     )
-    st.markdown(
-        f'<div class="stat-card"><div class="stat-label">Queries</div>'
-        f'<div class="stat-value">{st.session_state.query_count}</div></div>',
-        unsafe_allow_html=True,
-    )
-
-    if st.session_state.last_result:
-        lr     = st.session_state.last_result
-        ltool  = lr.get("tool_used", "")
-        lent   = lr.get("entity", "—")
-        st.markdown(
-            f'<div class="stat-card"><div class="stat-label">Last Tool</div>'
-            f'<div style="margin-top:5px;">{tool_badge(ltool)}</div></div>',
-            unsafe_allow_html=True,
-        )
-        if lent and lent != "—":
-            st.markdown(
-                f'<div class="stat-card"><div class="stat-label">Entity</div>'
-                f'<div class="stat-mono">{lent}</div></div>',
-                unsafe_allow_html=True,
-            )
-
     if st.button("🔄 New Conversation", use_container_width=True):
         reset_session()
         st.rerun()
-
-    st.divider()
-
-    st.markdown("### 💡 Try These")
-    examples = [
-        "How to fix ERROR_INVALID_HANDLE?",
-        "Smart card not working on Windows",
-        "Teams meeting keeps dropping",
-        "Cannot connect to internet after update",
-        "Relationship between VPN and Teams failure",
-        "Latest Windows 11 update causing BSOD",
-    ]
-    for ex in examples:
-        if st.button(ex, use_container_width=True, key=f"ex_{ex}"):
-            st.session_state.pending_question = ex
-            st.rerun()
 
     st.divider()
 
@@ -589,7 +533,7 @@ for i, msg in enumerate(st.session_state.messages):
         st.markdown(msg["content"])
         if msg["role"] == "assistant":
             render_steps(msg.get("steps", []), msg_idx=i)
-            render_meta(msg.get("tool", ""), msg.get("entity", ""))
+            render_confidence(msg.get("confidence", ""), msg.get("reflection_reason", ""))
             render_sources(msg.get("sources", []))
 
 
@@ -612,24 +556,24 @@ if question:
             result = query_api(question, st.session_state.session_id)
 
         if result:
-            answer  = result["answer"]
-            steps   = result.get("steps", [])
-            tool    = result.get("tool_used", "")
-            entity  = result.get("entity", "")
-            sources = result.get("sources", [])
+            answer     = result["answer"]
+            steps      = result.get("steps", [])
+            sources    = result.get("sources", [])
+            confidence = result.get("confidence", "")
+            reflection = result.get("reflection_reason", "")
 
             st.markdown(answer)
             render_steps(steps)
-            render_meta(tool, entity)
+            render_confidence(confidence, reflection)
             render_sources(sources)
 
             st.session_state.messages.append({
-                "role":    "assistant",
-                "content": answer,
-                "tool":    tool,
-                "entity":  entity,
-                "sources": sources,
-                "steps":   steps,
+                "role":              "assistant",
+                "content":           answer,
+                "sources":           sources,
+                "steps":             steps,
+                "confidence":        confidence,
+                "reflection_reason": reflection,
             })
             st.session_state.query_count += 1
             st.session_state.last_result  = result
