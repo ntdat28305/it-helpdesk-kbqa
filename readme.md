@@ -54,7 +54,7 @@
 │        │                           resolutions, error codes)        │
 │        ▼                                                            │
 │  entity_extractor.py ───────────► data/processed/*.json             │
-│  (Groq LLaMA 3.1 8B)              (entities + typed relations)     │
+│  (Groq LLaMA 3.1 8B)              (entities + typed relations)      │
 │        │                                                            │
 │        ▼                                                            │
 │  kg_loader.py ──────────────────► Neo4j AuraDB                      │
@@ -68,7 +68,7 @@
 │        │   (Leiden algorithm)                                       │
 │        ├── summarizer.py ───────► data/community_summaries.json     │
 │        │   (LLM per cluster)                                        │
-│        └── train_gcn.py ────────► models/embeddings/               │
+│        └── train_gcn.py ────────► models/embeddings/                │
 │            (Graph Autoencoder)    node_embeddings.npy (32-dim)      │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
@@ -79,19 +79,19 @@
 │  User Question                                                      │
 │       │                                                             │
 │       ├──► Regex pre-routing (error codes → CYPHER, versions → WEB) │
-│       ├──► Ambiguity detection (follow-up resolution)              │
-│       ├──► Topic-change detection (auto history reset)             │
-│       ├──► Lightweight planning note (8B model)                    │
+│       ├──► Ambiguity detection (follow-up resolution)               │
+│       ├──► Topic-change detection (auto history reset)              │
+│       ├──► Lightweight planning note (8B model)                     │
 │       │                                                             │
-│       ▼  LLaMA 3.3 70B · Function-Calling · ≤4 steps              │
-│  ┌──────────┬──────────┬──────────┬──────────┐                     │
-│  │ CYPHER   │EMBEDDING │   BFS    │WEBSEARCH │                     │
-│  │ Exact KG │ GCN sim  │  Path    │  Tavily  │                     │
-│  │ search   │ top-K    │ 4-hop    │ fallback │                     │
-│  └──────────┴──────────┴──────────┴──────────┘                     │
+│       ▼  LLaMA 3.3 70B · Function-Calling · ≤4 steps                │
+│  ┌──────────┬──────────┬──────────┬──────────┐                      │
+│  │ CYPHER   │EMBEDDING │   BFS    │WEBSEARCH │                      │
+│  │ Exact KG │ GCN sim  │  Path    │  Tavily  │                      │
+│  │ search   │ top-K    │ 4-hop    │ fallback │                      │
+│  └──────────┴──────────┴──────────┴──────────┘                      │
 │       │                                                             │
 │       ├──► Community context enrichment                             │
-│       ├──► Answer synthesis (70B model)                            │
+│       ├──► Answer synthesis (70B model)                             │
 │       └──► Self-reflection → re-synthesize if low confidence        │
 │                                                                     │
 │  FastAPI (port 8000) ──────────► Streamlit UI (port 8501)           │
@@ -303,12 +303,12 @@ User Question
      ▼
   ┌─── ReAct Loop — max 4 steps ─────────────────────────────────┐
   │  Model: LLaMA 3.3 70B · temperature=0 · function-calling     │
-  │                                                               │
-  │  Thought: which tool best answers this question?              │
-  │  Action:  call tool, get observation                          │
-  │  Repeat:  if insufficient → try different tool or rephrase    │
-  │  Early exit: stop once answer is clear                        │
-  └───────────────────────────────────────────────────────────────┘
+  │                                                              │
+  │  Thought: which tool best answers this question?             │
+  │  Action:  call tool, get observation                         │
+  │  Repeat:  if insufficient → try different tool or rephrase   │
+  │  Early exit: stop once answer is clear                       │
+  └──────────────────────────────────────────────────────────────┘
      │
      ├─ Community context enrichment
      │     substring-match entity against community summaries → append domain context
