@@ -126,6 +126,11 @@ st.markdown("""
     color: #f0a800;
     border: 1px solid rgba(158,106,3,0.4);
 }
+.badge-thought {
+    background: rgba(18,46,46,0.6);
+    color: #39d2c0;
+    border: 1px solid rgba(57,210,192,0.35);
+}
 
 /* ── Reasoning steps (collapsible via <details>) ───────── */
 details.steps-container {
@@ -383,6 +388,7 @@ TOOL_META = {
     "EMBEDDING": {"icon": "🧠", "label": "Semantic Search",  "badge": "badge-EMBEDDING"},
     "BFS":       {"icon": "🕸️", "label": "Graph Traversal",  "badge": "badge-BFS"},
     "WEBSEARCH": {"icon": "🌐", "label": "Web Search",       "badge": "badge-WEBSEARCH"},
+    "thought":   {"icon": "💭", "label": "Thinking",          "badge": "badge-thought"},
 }
 
 
@@ -422,24 +428,50 @@ def reset_session():
 
 # ── Render helpers ────────────────────────────────────────────
 def render_steps(steps: list[dict], msg_idx: int = 0):
-    """Collapsible — collapsed shows nothing, expanded shows tool badges only."""
+    """Collapsible — expanded shows each step as a numbered card with tool badge."""
     if not steps:
         return
 
-    tools_used = []
+    cards_html = ""
     for s in steps:
-        tool = s.get("tool", "")
-        if tool and tool not in tools_used:
-            tools_used.append(tool)
+        step_num = s.get("step", "?")
+        tool = s.get("tool", "unknown")
+        step_input = s.get("input", "")
+        badge = tool_badge(tool)
 
-    tool_pills = " ".join(tool_badge(t) for t in tools_used)
+        # Short descriptor under badge
+        if tool == "thought":
+            desc = "Synthesizing answer"
+        elif step_input:
+            desc = step_input
+        else:
+            desc = ""
+
+        desc_html = (
+            f'<div class="step-input">{desc}</div>'
+            if desc else ""
+        )
+
+        cards_html += (
+            f'<div class="step-card">'
+            f'  <div class="step-num">{step_num}</div>'
+            f'  <div class="step-tool-line">{badge}</div>'
+            f'  {desc_html}'
+            f'</div>'
+        )
+
+    count_badge = f'<span class="steps-count">{len(steps)} steps</span>'
+
     st.markdown(
         f'<details class="steps-container" style="margin-top:10px;">'
         f'  <summary>'
         f'    <div class="steps-toggle-left">⚙ Reasoning Steps</div>'
-        f'    <span class="steps-chevron">▶</span>'
+        f'    <div class="steps-toggle-right">'
+        f'      {count_badge}'
+        f'      <span class="steps-chevron">▶</span>'
+        f'    </div>'
         f'  </summary>'
-        f'  <div class="steps-inner" style="padding:10px 14px;">{tool_pills}</div>'
+        f'  <div class="steps-inner">{cards_html}</div>'
         f'</details>',
         unsafe_allow_html=True,
     )
@@ -487,12 +519,6 @@ st.markdown("""
 <div class="hero-header">
   <div class="hero-title">🖥️ IT Helpdesk Assistant</div>
   <div class="hero-sub">Intelligent troubleshooting powered by Knowledge Graphs and Agentic AI</div>
-  <div class="hero-pills">
-    <span class="hero-pill">🕸️ Knowledge Graph</span>
-    <span class="hero-pill">🧠 GCN Embedding</span>
-    <span class="hero-pill">🤖 ReAct Agent</span>
-    <span class="hero-pill">⚡ Groq LLaMA 3.1</span>
-  </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -524,7 +550,7 @@ with st.sidebar:
         )
 
     st.divider()
-    st.caption("IT Helpdesk KBQA · NLP for Enterprise · VNU-HCMUS")
+
 
 
 # ── Chat history ──────────────────────────────────────────────
