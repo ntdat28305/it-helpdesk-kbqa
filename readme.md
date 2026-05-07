@@ -1,106 +1,107 @@
 <div align="center">
 
-# 🖥️ IT Helpdesk KBQA
+# IT Helpdesk KBQA
 
 ### Knowledge Graph–Powered Question Answering for IT Support
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Neo4j](https://img.shields.io/badge/Neo4j-AuraDB-008CC1?style=for-the-badge&logo=neo4j&logoColor=white)](https://neo4j.com)
-[![Groq](https://img.shields.io/badge/Groq-LLaMA_3.1-F55036?style=for-the-badge&logo=meta&logoColor=white)](https://groq.com)
-[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Groq](https://img.shields.io/badge/Groq-LLaMA_3.3_70B-F55036?style=for-the-badge&logo=meta&logoColor=white)](https://groq.com)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.35+-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
 
-*An end-to-end agentic AI system that transforms Microsoft Learn troubleshooting articles into a structured Knowledge Graph, learns semantic representations via Graph Convolutional Networks, and answers IT helpdesk questions through a multi-tool ReAct agent.*
+*An end-to-end agentic AI system that transforms Microsoft Learn troubleshooting articles into a structured Knowledge Graph, learns semantic node representations via Graph Convolutional Networks, and answers IT helpdesk questions through a multi-tool ReAct agent with self-reflection.*
 
 ---
 
-[**Architecture**](#-architecture) · [**Quick Start**](#-quick-start) · [**Data Pipeline**](#-data-pipeline) · [**Agent Tools**](#-agent--react-loop) · [**Evaluation**](#-evaluation) · [**API Reference**](#-api-reference)
+[**Architecture**](#-architecture) · [**Quick Start**](#-quick-start) · [**Data Pipeline**](#-data-pipeline) · [**Agent**](#-agent--react-loop) · [**Evaluation**](#-evaluation) · [**API Reference**](#-api-reference)
 
 </div>
 
 ---
 
-## ✨ Highlights
+## Highlights
 
 | Feature | Description |
 |---|---|
-| 🕸️ **Knowledge Graph** | 3,266 IT entities & 7,000+ relationships stored in Neo4j AuraDB |
-| 🧠 **GCN Embeddings** | Graph Autoencoder produces 32-dim structural embeddings for semantic node similarity |
-| 🤖 **ReAct Agent** | Groq function-calling drives a Thought → Action → Observation loop across 4 specialized tools |
-| 🔍 **Multi-Tool Retrieval** | Cypher exact search · GCN semantic search · BFS path reasoning · Tavily web fallback |
-| 🏘️ **Community Intelligence** | Leiden algorithm clusters entities into topic communities, LLM-summarized for contextual grounding |
-| 🌐 **Finetuned Retriever** | Optional sentence-transformers retriever trained on domain-specific pairs for improved entity matching |
-| 💬 **Multi-Turn Dialogue** | Session-aware conversation with automatic topic-change detection and ambiguity resolution |
-| 📊 **Rigorous Evaluation** | Hit@K, MRR, ROUGE-L metrics with per-tool and per-category breakdowns vs BM25 baseline |
+| **Knowledge Graph** | 3,266 IT entities and 7,000+ typed relationships stored in Neo4j AuraDB |
+| **GCN Embeddings** | Graph Autoencoder (384 → 64 → 32 dim) trained on structural co-occurrence with L2-normalized outputs |
+| **ReAct Agent** | Groq function-calling drives a Thought → Action → Observation loop with up to 4 steps per query |
+| **4-Tool Retrieval** | Cypher exact search · GCN semantic search · BFS path reasoning · Tavily web fallback |
+| **Dual LLM** | LLaMA 3.3 70B Versatile for reasoning & synthesis; LLaMA 3.1 8B Instant for fast pre-processing |
+| **Community Intelligence** | Leiden algorithm clusters entities into topic communities, LLM-summarized for contextual grounding |
+| **Finetuned Retriever** | Optional sentence-transformers model trained on domain-specific entity pairs |
+| **Multi-Turn Dialogue** | Session-aware conversations with automatic topic-change detection and ambiguity resolution |
+| **Self-Reflection** | Agent evaluates its own answer confidence and re-synthesizes if insufficient |
 
 ---
 
-## 🏗 Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        DATA PIPELINE                                │
+│                          DATA PIPELINE                              │
 │                                                                     │
-│  Microsoft Learn Docs ──► discover_urls.py ──► 378 article URLs     │
-│          │                                                          │
-│          ▼                                                          │
-│  scraper.py ──────────► data/raw/{category}/*.json                  │
-│          │               (structured articles with symptoms,        │
-│          │                causes, resolution steps, error codes)     │
-│          ▼                                                          │
-│  entity_extractor.py ──► data/processed/*.json                      │
-│  (Groq LLaMA 3.1)        (entities + relations via LLM extraction) │
-│          │                                                          │
-│          ▼                                                          │
-│  kg_loader.py ──────────► Neo4j AuraDB                              │
-│                           ├── :Entity nodes (3,266)                 │
-│                           ├── :Article nodes                        │
-│                           ├── CAUSES / FIXES / AFFECTS / ...        │
-│                           └── MENTIONS (Article → Entity)           │
-│          │                                                          │
-│          ├── community.py ──► Leiden clustering ──► communities.json │
-│          ├── summarizer.py ──► LLM summaries ──► community_summ.json│
-│          └── train_gcn.py ──► GAE training ──► node_embeddings.npy  │
+│  Microsoft Learn Docs                                               │
+│        │                                                            │
+│        ▼                                                            │
+│  discover_urls.py ──────────────► data/discovered_urls.json         │
+│        │                          (378 URLs across 4 IT domains)    │
+│        ▼                                                            │
+│  scraper.py ────────────────────► data/raw/{category}/*.json        │
+│        │                          (title, symptoms, causes,         │
+│        │                           resolutions, error codes)        │
+│        ▼                                                            │
+│  entity_extractor.py ───────────► data/processed/*.json             │
+│  (Groq LLaMA 3.1 8B)              (entities + typed relations)     │
+│        │                                                            │
+│        ▼                                                            │
+│  kg_loader.py ──────────────────► Neo4j AuraDB                      │
+│                                   ├── :Entity (3,266 nodes)         │
+│                                   ├── :Article nodes                │
+│                                   ├── CAUSES / FIXES / AFFECTS /    │
+│                                   │   REQUIRES / RELATED_TO         │
+│                                   └── MENTIONS (Article → Entity)   │
+│        │                                                            │
+│        ├── community.py ────────► data/communities.json             │
+│        │   (Leiden algorithm)                                       │
+│        ├── summarizer.py ───────► data/community_summaries.json     │
+│        │   (LLM per cluster)                                        │
+│        └── train_gcn.py ────────► models/embeddings/               │
+│            (Graph Autoencoder)    node_embeddings.npy (32-dim)      │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│                       INFERENCE ENGINE                              │
+│                         INFERENCE ENGINE                            │
 │                                                                     │
 │  User Question                                                      │
 │       │                                                             │
-│       ▼                                                             │
-│  ┌─────────────────────────────────────────────────┐                │
-│  │          ReAct Agent (ITHelpdeskAgent)           │                │
-│  │  ┌───────────────────────────────────────────┐  │                │
-│  │  │  Pre-routing: regex → forced tool hint    │  │                │
-│  │  │  Ambiguity check → follow-up detection    │  │                │
-│  │  │  Topic change → auto history reset        │  │                │
-│  │  └───────────────────────────────────────────┘  │                │
-│  │       │                                         │                │
-│  │       ▼  Groq Function-Calling Loop (≤4 steps)  │                │
-│  │  ┌──────────┬──────────┬──────────┬──────────┐  │                │
-│  │  │ 🔍       │ 🧠       │ 🕸️       │ 🌐       │  │                │
-│  │  │ CYPHER   │EMBEDDING │  BFS     │WEBSEARCH │  │                │
-│  │  │ Exact KG │ GCN sim  │ Path     │ Tavily   │  │                │
-│  │  │ search   │ search   │ reason   │ fallback │  │                │
-│  │  └──────────┴──────────┴──────────┴──────────┘  │                │
-│  │       │                                         │                │
-│  │       ▼                                         │                │
-│  │  Community context enrichment                   │                │
-│  │  Answer synthesis + source attribution          │                │
-│  └─────────────────────────────────────────────────┘                │
+│       ├──► Regex pre-routing (error codes → CYPHER, versions → WEB) │
+│       ├──► Ambiguity detection (follow-up resolution)              │
+│       ├──► Topic-change detection (auto history reset)             │
+│       ├──► Lightweight planning note (8B model)                    │
 │       │                                                             │
-│       ▼                                                             │
-│  FastAPI REST API ──────► Streamlit Chat UI                         │
-│  (port 8000)              (port 8501)                               │
+│       ▼  LLaMA 3.3 70B · Function-Calling · ≤4 steps              │
+│  ┌──────────┬──────────┬──────────┬──────────┐                     │
+│  │ CYPHER   │EMBEDDING │   BFS    │WEBSEARCH │                     │
+│  │ Exact KG │ GCN sim  │  Path    │  Tavily  │                     │
+│  │ search   │ top-K    │ 4-hop    │ fallback │                     │
+│  └──────────┴──────────┴──────────┴──────────┘                     │
+│       │                                                             │
+│       ├──► Community context enrichment                             │
+│       ├──► Answer synthesis (70B model)                            │
+│       └──► Self-reflection → re-synthesize if low confidence        │
+│                                                                     │
+│  FastAPI (port 8000) ──────────► Streamlit UI (port 8501)           │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -108,22 +109,19 @@
 |---|---|---|
 | **Python 3.11+** | Runtime | [python.org](https://python.org) |
 | **Neo4j AuraDB** | Graph database (free tier) | [console.neo4j.io](https://console.neo4j.io) |
-| **Groq API Key** | LLM inference (free) | [console.groq.com](https://console.groq.com) |
-| **Tavily API Key** | Web search fallback (free) | [app.tavily.com](https://app.tavily.com) |
+| **Groq API Key** | LLM inference (free tier) | [console.groq.com](https://console.groq.com) |
+| **Tavily API Key** | Web search fallback (free tier) | [app.tavily.com](https://app.tavily.com) |
 
 ### Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/ntdat28305/it-helpdesk-kbqa.git
 cd it-helpdesk-kbqa
 
-# Create virtual environment
 python -m venv venv
-source venv/bin/activate        # Linux / macOS
-venv\Scripts\Activate.ps1       # Windows PowerShell
+source venv/bin/activate          # Linux / macOS
+venv\Scripts\Activate.ps1         # Windows PowerShell
 
-# Install dependencies
 pip install -r requirements.txt
 ```
 
@@ -136,10 +134,10 @@ cp .env.example .env
 Edit `.env` with your credentials:
 
 ```env
-# Groq — entity extraction rotates through all keys; agent uses key 1
+# Groq — extraction rotates through all keys; agent inference uses key 1
 GROQ_API_KEY_1=gsk_...
-GROQ_API_KEY_2=gsk_...          # optional, for rate-limit rotation
-GROQ_API_KEY_3=gsk_...          # optional
+GROQ_API_KEY_2=gsk_...   # optional — for rate-limit rotation during pipeline
+GROQ_API_KEY_3=gsk_...   # optional
 
 # Neo4j AuraDB
 NEO4J_URI=neo4j+s://xxxxxxxx.databases.neo4j.io
@@ -153,18 +151,18 @@ TAVILY_API_KEY=tvly-...
 ### Run (Local)
 
 ```bash
-# Terminal 1 — API server
+# Terminal 1 — start the API
 uvicorn src.api.main:app --reload --port 8000
 
-# Terminal 2 — Chat UI
+# Terminal 2 — start the UI
 streamlit run src/ui/app.py
 ```
 
 | Service | URL |
 |---|---|
-| 💬 Chat UI | http://localhost:8501 |
-| 📖 API Docs (Swagger) | http://localhost:8000/docs |
-| ❤️ Health Check | http://localhost:8000/health |
+| Chat UI | http://localhost:8501 |
+| API Docs (Swagger) | http://localhost:8000/docs |
+| Health Check | http://localhost:8000/health |
 
 ### Run (Docker)
 
@@ -172,20 +170,19 @@ streamlit run src/ui/app.py
 docker-compose up --build
 ```
 
-> **Note:** Neo4j AuraDB is a cloud service — no local Neo4j instance needed.  
-> Make sure `data/communities.json`, `data/community_summaries.json`, and `models/` exist before running the API. See [Data Pipeline](#-data-pipeline) if building from scratch.
+> **Note:** `data/communities.json`, `data/community_summaries.json`, and the `models/` directory must exist before running the API. Neo4j AuraDB is a cloud service — no local database needed. See [Data Pipeline](#-data-pipeline) if you need to build from scratch.
 
 ---
 
-## 📦 Data Pipeline
+## Data Pipeline
 
-The pipeline transforms raw Microsoft Learn documentation into a queryable Knowledge Graph in 5 stages:
+The pipeline converts raw Microsoft Learn documentation into a queryable Knowledge Graph in 5 sequential stages:
 
 ```
- ① Discover    ② Scrape       ③ Extract       ④ Load          ⑤ Enrich
-────────────  ────────────  ──────────────  ────────────  ────────────────
-  URLs          Articles      Entities        Neo4j KG      Communities
-  (378)         (raw JSON)    (LLM-based)     (3,266 E)     + GCN Embed
+ ① Discover    ② Scrape       ③ Extract       ④ Load         ⑤ Enrich
+────────────  ────────────  ──────────────  ───────────  ──────────────────
+  378 URLs      Raw JSON      Entities &      Neo4j KG     Communities +
+                              Relations       3,266 E       GCN Embeddings
 ```
 
 ### ① Discover URLs
@@ -194,162 +191,195 @@ The pipeline transforms raw Microsoft Learn documentation into a queryable Knowl
 python scripts/discover_urls.py
 ```
 
-Crawls Microsoft Learn Table-of-Contents JSON endpoints to discover troubleshooting article URLs across 4 IT domains.
+Crawls Microsoft Learn Table-of-Contents JSON endpoints to discover troubleshooting article URLs.
 
 | Category | Source | Articles |
 |---|---|---|
 | Network | Windows Client & Server | 100 |
 | Teams | Microsoft Teams | 78 |
 | Identity | Microsoft Entra | 100 |
-| DeviceMgmt | Intune & ConfigMgr | 100 |
+| DeviceMgmt | Intune & Configuration Manager | 100 |
 
 **Output:** `data/discovered_urls.json`
 
 ### ② Scrape Articles
 
 ```bash
-# Dry run — preview without saving
-python -m src.ingestion.scraper --limit 50 --dry-run
-
-# Full scrape
-python -m src.ingestion.scraper
+python -m src.ingestion.scraper --limit 50 --dry-run   # preview
+python -m src.ingestion.scraper                         # full run
 ```
 
-Extracts structured content from each article: title, plain text, headings, symptoms, causes, resolution steps, and error codes (e.g., `0x80070005`, `ERROR_INVALID_HANDLE`, `KB5034441`).
+Extracts structured fields from each article: title, plain text, headings, symptoms, causes, resolution steps, and error codes (`0x80070005`, `ERROR_INVALID_HANDLE`, `KB5034441`, etc.). Rate-limited with configurable delays (1.5–3 s, 3 retries, caching enabled).
 
 **Output:** `data/raw/{category}/*.json`
 
 ### ③ Extract Entities & Relations
 
 ```bash
-# Dry run
-python -m src.kg_build.entity_extractor --limit 5 --dry-run
-
-# Full extraction
-python -m src.kg_build.entity_extractor
+python -m src.kg_build.entity_extractor --limit 5 --dry-run   # preview
+python -m src.kg_build.entity_extractor                        # full run
 ```
 
-Uses **Groq LLaMA 3.1-8B** to extract IT entities (`Error`, `Product`, `Fix`, `Symptom`, `Concept`) and typed relations (`CAUSES`, `FIXES`, `AFFECTS`, `REQUIRES`, `RELATED_TO`) from each article. Supports multi-key rotation to handle rate limits.
+Uses **Groq LLaMA 3.1 8B Instant** to extract typed entities and relations from each article. Supports multi-key rotation to handle rate limits (`GROQ_API_KEY_1` … `GROQ_API_KEY_N`). Checkpoint-based — safe to interrupt and resume.
+
+| Entity types | Relation types |
+|---|---|
+| `Error`, `Product`, `Fix`, `Symptom`, `Concept` | `CAUSES`, `FIXES`, `AFFECTS`, `REQUIRES`, `RELATED_TO` |
 
 **Output:** `data/processed/*.json`
 
 ### ④ Load into Neo4j
 
 ```bash
-# Test with a few files
-python -m src.kg_build.kg_loader --limit 5
-
-# Load all
-python -m src.kg_build.kg_loader
+python -m src.kg_build.kg_loader --limit 5   # test
+python -m src.kg_build.kg_loader              # full load
 ```
 
-Creates Entity/Article nodes with `UNIQUE` constraints and full-text indexing. Relations are validated against a whitelist (`[A-Z][A-Z0-9_]*`) to prevent Cypher injection.
+Creates `UNIQUE` constraints on `Entity.name` and `Article.article_id`, adds a fulltext index on `Entity.name`, and validates all relation types against a whitelist pattern (`[A-Z][A-Z0-9_]*`) to prevent Cypher injection.
 
-### ⑤ Community Detection + GCN Training
+### ⑤ Enrich: Communities + GCN
 
 ```bash
-# Detect communities (Leiden algorithm)
+# Step 5a — Leiden community detection
 python -m src.kg_build.community
 
-# Summarize each community (LLM)
+# Step 5b — LLM summaries per community
 python -m src.kg_build.summarizer
 
-# Train Graph Autoencoder
+# Step 5c — Train Graph Autoencoder
 python -m src.embedding.train_gcn
 ```
 
 | Component | Algorithm | Output |
 |---|---|---|
-| Community Detection | [Leiden](https://github.com/microsoft/graspologic) with 10 trials | `data/communities.json` |
-| Community Summaries | Groq LLM (2–3 sentence description per cluster) | `data/community_summaries.json` |
-| GCN Embeddings | 2-layer GAE (input→64→32) with dropout + early stopping | `models/embeddings/node_embeddings.npy` |
+| Community detection | [Leiden](https://github.com/microsoft/graspologic) (10 trials) | `data/communities.json` |
+| Community summaries | Groq LLM (2–3 sentence per cluster) | `data/community_summaries.json` |
+| GCN node embeddings | Graph Autoencoder: 384 → 64 → 32 dim | `models/embeddings/node_embeddings.npy` |
 
-The **Graph Autoencoder (GAE)** uses sentence-transformer features as input (not one-hot), trains with negative sampling + BCEWithLogitsLoss, and applies early stopping on a 90/10 train/val split.
+The **Graph Autoencoder (GAE)** uses `all-MiniLM-L6-v2` sentence-transformer features (384-dim) as initial node features. Architecture: 2-layer GCNConv (64 hidden, 32 output) with dropout 0.3, trained with BCEWithLogitsLoss + negative sampling on a 90/10 split, early stopping patience 20. Embeddings are L2-normalized for cosine similarity via dot product.
+
+### Optional: Finetune the Retriever
+
+```bash
+# Generate domain entity pairs for contrastive training
+python scripts/generate_finetune_data.py
+
+# Finetune sentence-transformers on those pairs
+python scripts/finetune_retriever.py   # → models/retriever/
+```
+
+When `models/retriever/` exists, the agent uses semantic (cosine) matching for entity lookup instead of RapidFuzz fuzzy matching, improving recall on domain-specific terminology.
 
 ---
 
-## 🤖 Agent & ReAct Loop
+## Agent & ReAct Loop
 
-The core of the system is `ITHelpdeskAgent` — a multi-step reasoning agent that uses **Groq function-calling** to implement the [ReAct](https://arxiv.org/abs/2210.03629) paradigm:
+The core of the system is `ITHelpdeskAgent` in [src/agent/agent.py](src/agent/agent.py). Every query follows a fixed pipeline with **two Groq models** at different cost/speed tradeoffs:
+
+| Stage | Model | Purpose |
+|---|---|---|
+| Pre-processing | LLaMA 3.1 8B Instant | Ambiguity check, topic-change detection, planning |
+| ReAct loop | LLaMA 3.3 70B Versatile | Function-calling, tool selection, reasoning |
+| Synthesis & reflection | LLaMA 3.3 70B Versatile | Answer generation, confidence scoring, re-synthesis |
+
+### Query Flow
 
 ```
 User Question
      │
-     ├──► Regex pre-routing (error codes → CYPHER, time refs → WEBSEARCH)
-     ├──► Ambiguity detection (pronouns, follow-ups)
-     ├──► Topic change detection (auto-reset history)
+     ├─ Regex pre-routing
+     │     0x... / ERROR_* / KB\d+ → force CYPHER
+     │     24H2 / latest version   → force WEBSEARCH
+     │
+     ├─ Ambiguity detection  (8B)
+     │     "how do I fix it?" with prior context → resolve pronouns from history
+     │
+     ├─ Topic-change detection  (8B)
+     │     New topic detected → auto-reset conversation history
+     │
+     ├─ Lightweight planning note  (8B)
+     │     1-2 sentence strategy hint passed to the ReAct loop
      │
      ▼
-  ┌─── ReAct Loop (max 4 steps) ────────────────────────┐
-  │  Thought: LLM decides which tool to call             │
-  │  Action:  Execute tool, get observation              │
-  │  Loop:    If enough info → synthesize answer         │
-  │           If not → try different tool / rephrase      │
-  └──────────────────────────────────────────────────────┘
+  ┌─── ReAct Loop — max 4 steps ─────────────────────────────────┐
+  │  Model: LLaMA 3.3 70B · temperature=0 · function-calling     │
+  │                                                               │
+  │  Thought: which tool best answers this question?              │
+  │  Action:  call tool, get observation                          │
+  │  Repeat:  if insufficient → try different tool or rephrase    │
+  │  Early exit: stop once answer is clear                        │
+  └───────────────────────────────────────────────────────────────┘
      │
-     ▼
-  Answer + Sources + Reasoning Steps
+     ├─ Community context enrichment
+     │     substring-match entity against community summaries → append domain context
+     │
+     ├─ Answer synthesis  (70B)
+     │
+     └─ Self-reflection  (70B)
+           Evaluate answer quality → confidence: high / medium / low
+           If low confidence → re-synthesize with targeted hint
 ```
 
 ### Tool Suite
 
-| Tool | Trigger | What it does |
+| Tool | Trigger | Mechanism |
 |---|---|---|
-| 🔍 **CYPHER** | Error codes (`0x...`, `ERROR_XXX`, `KB...`) | Exact entity lookup in Neo4j with Cypher `CONTAINS` matching |
-| 🧠 **EMBEDDING** | Vague symptoms ("not working", "keeps crashing") | GCN cosine similarity → top-K similar nodes → fetch related articles |
-| 🕸️ **BFS** | Relationship queries ("what causes X when Y") | `allShortestPaths` with max 4 hops between two entities |
-| 🌐 **WEBSEARCH** | Recent/versioned issues ("24H2", "latest update") | Tavily API with `include_answer=True` for quick summaries |
+| **CYPHER** | Error codes (`0x...`, `ERROR_XXX`, `KB\d+`), exact product names | `CONTAINS toLower(...)` match on `Entity.name` → up to 20 relations + 5 articles |
+| **EMBEDDING** | Vague symptoms ("not working", "keeps crashing") | RapidFuzz fuzzy match (threshold 75) or finetuned retriever → GCN cosine top-K → CYPHER on top 3 nodes |
+| **BFS** | Relational queries ("what causes X when Y") | `allShortestPaths((a)-[*..4]-(b))` with 3-tier entity fallback (exact → prefix → contains) |
+| **WEBSEARCH** | Recent/version-specific issues (`24H2`, `latest update`) | Tavily API · max 3 results · `include_answer=True` for quick summary |
 
-### Smart Features
+### Smart Behaviors
 
-- **Fuzzy matching** via `rapidfuzz` (threshold 75) when the finetuned retriever is unavailable
-- **Finetuned retriever** (optional): `sentence-transformers` model trained on domain-specific entity pairs for improved semantic matching
-- **Community context enrichment**: Appends relevant community summaries to the agent's response context
-- **Session memory**: Maintains up to 40 messages per session with LRU eviction (max 500 concurrent sessions)
+- **Deduplication**: skips repeated `(tool, args)` pairs within the same query
+- **Empty-result fallback**: if any KG tool returns empty results, automatically re-runs as WEBSEARCH
+- **Fuzzy entity matching**: RapidFuzz (score ≥ 75) when no finetuned retriever is available
+- **Session memory**: up to 40 messages per session (LRU eviction); last 4 turns passed to answer generation; max 500 concurrent sessions
 
 ---
 
-## 📊 Evaluation
+## Evaluation
 
 ### Test Set Generation
 
 ```bash
-# Generate 50 natural language questions from raw articles (stratified by category)
+# Generate 50 stratified natural-language questions from raw articles
 python scripts/generate_testset.py --limit 50
 ```
 
-Questions are designed to mimic real user complaints (e.g., *"My computer keeps crashing after the latest update"*) rather than technical queries.
+Questions mimic real user complaints (*"My computer keeps crashing after the latest update"*) rather than technical queries.
 
 ### Run Evaluation
 
 ```bash
-# Requires FastAPI to be running
+# Requires FastAPI to be running on port 8000
 python scripts/evaluate.py
 ```
 
-### Results (n=49)
+Metrics: **Hit@1**, **Hit@5**, **MRR**, **ROUGE-L**. Compared against a BM25 baseline that retrieves directly from the full article corpus.
+
+### Results (n = 49)
 
 <table>
 <tr>
-<th></th>
-<th align="center">Metric</th>
-<th align="center">BM25 Baseline</th>
-<th align="center">ReAct Agent</th>
+  <th>Metric</th>
+  <th align="center">BM25 Baseline</th>
+  <th align="center">ReAct Agent</th>
 </tr>
-<tr><td>📍</td><td><b>Hit@1</b></td><td align="center">0.347</td><td align="center">0.122</td></tr>
-<tr><td>📍</td><td><b>Hit@5</b></td><td align="center">0.469</td><td align="center">0.224</td></tr>
-<tr><td>📈</td><td><b>MRR</b></td><td align="center">0.398</td><td align="center">0.181</td></tr>
-<tr><td>📝</td><td><b>ROUGE-L</b></td><td align="center">—</td><td align="center">0.121</td></tr>
+<tr><td><b>Hit@1</b></td><td align="center">0.347</td><td align="center">0.122</td></tr>
+<tr><td><b>Hit@5</b></td><td align="center">0.469</td><td align="center">0.224</td></tr>
+<tr><td><b>MRR</b></td><td align="center">0.398</td><td align="center">0.181</td></tr>
+<tr><td><b>ROUGE-L</b></td><td align="center">—</td><td align="center">0.121</td></tr>
 </table>
 
 ### Per-Tool Performance
 
 | Tool | N | Hit@1 | Hit@5 | MRR | ROUGE-L |
 |---|---|---|---|---|---|
-| 🔍 CYPHER | 4 | 0.250 | 0.250 | 0.250 | 0.116 |
-| 🧠 EMBEDDING | 24 | 0.125 | 0.292 | 0.208 | 0.121 |
-| 🕸️ BFS | 8 | 0.125 | 0.250 | 0.182 | 0.114 |
-| 🌐 WEBSEARCH | 13 | 0.077 | 0.077 | 0.110 | 0.126 |
+| CYPHER | 4 | 0.250 | 0.250 | 0.250 | 0.116 |
+| EMBEDDING | 24 | 0.125 | 0.292 | 0.208 | 0.121 |
+| BFS | 8 | 0.125 | 0.250 | 0.182 | 0.114 |
+| WEBSEARCH | 13 | 0.077 | 0.077 | 0.110 | 0.126 |
 
 ### Per-Category Performance
 
@@ -360,42 +390,45 @@ python scripts/evaluate.py
 | Teams | 12 | 0.083 | 0.206 | 0.112 |
 | Identity | 12 | 0.083 | 0.088 | 0.122 |
 
-> **Note:** The agent is optimized for *answer quality* and *multi-turn conversation*, not pure retrieval recall. BM25 operates on the full article corpus directly, while the agent retrieves through a Knowledge Graph with LLM-based entity extraction as an intermediary — a fundamentally different retrieval paradigm.
+> **Note:** The agent is optimized for *answer quality* and *multi-turn conversation*, not pure retrieval recall. BM25 operates directly on the full article corpus; the agent retrieves through a Knowledge Graph with LLM-based entity extraction as an intermediary — a fundamentally different retrieval paradigm.
 
 ---
 
-## 📡 API Reference
+## API Reference
+
+Base URL: `http://localhost:8000`
 
 ### `POST /query`
 
-Submit an IT helpdesk question.
+Submit an IT helpdesk question. `session_id` is auto-generated (UUID4) if omitted.
 
 ```bash
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
-  -d '{
-    "question": "How to fix ERROR_INVALID_HANDLE?",
-    "session_id": "user_1"
-  }'
+  -d '{"question": "How to fix ERROR_INVALID_HANDLE?", "session_id": "user_1"}'
 ```
 
 **Response:**
+
 ```json
 {
   "question": "How to fix ERROR_INVALID_HANDLE?",
-  "answer": "To fix ERROR_INVALID_HANDLE, try these steps: ...",
+  "answer": "To fix ERROR_INVALID_HANDLE, check the handle lifecycle...",
   "tool_used": "CYPHER",
   "entity": "ERROR_INVALID_HANDLE",
-  "sources": ["https://learn.microsoft.com/..."],
+  "sources": ["https://learn.microsoft.com/en-us/troubleshoot/..."],
   "session_id": "user_1",
   "steps": [
     {
       "step": 1,
-      "tool": "CYPHER",
+      "tool": "cypher_search",
       "input": "ERROR_INVALID_HANDLE",
-      "observation": "Knowledge Graph Relations: ..."
+      "observation": "Relations: ERROR_INVALID_HANDLE -[CAUSES]-> Application Crash ..."
     }
-  ]
+  ],
+  "plan_note": "Error code detected — start with CYPHER search.",
+  "confidence": "high",
+  "reflection_reason": "Answer directly addresses the error with actionable steps."
 }
 ```
 
@@ -406,62 +439,61 @@ curl http://localhost:8000/health
 # → {"status": "ok", "active_sessions": 3}
 ```
 
-### `DELETE /session/{session_id}`
-
-Reset a conversation session and clear its history.
-
-```bash
-curl -X DELETE http://localhost:8000/session/user_1
-```
-
 ### `GET /sessions`
-
-List all active sessions.
 
 ```bash
 curl http://localhost:8000/sessions
 # → {"active_sessions": ["user_1", "user_2"], "total": 2}
 ```
 
+### `DELETE /session/{session_id}`
+
+Reset a conversation session and clear its history.
+
+```bash
+curl -X DELETE http://localhost:8000/session/user_1
+# → {"message": "Session user_1 đã được xóa"}
+```
+
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 it-helpdesk-kbqa/
 │
 ├── src/
 │   ├── ingestion/
-│   │   └── scraper.py              # Microsoft Learn article scraper
+│   │   └── scraper.py              # Microsoft Learn article scraper (BS4 + lxml)
 │   │
 │   ├── kg_build/
-│   │   ├── entity_extractor.py     # LLM-based entity & relation extraction
-│   │   ├── kg_loader.py            # Neo4j graph loader with schema validation
-│   │   ├── community.py            # Leiden community detection
-│   │   └── summarizer.py           # LLM community summarization
+│   │   ├── entity_extractor.py     # LLM entity/relation extraction + key rotation
+│   │   ├── kg_loader.py            # Neo4j batch loader with schema validation
+│   │   ├── community.py            # Leiden community detection (graspologic)
+│   │   └── summarizer.py           # LLM summarization per community
 │   │
 │   ├── embedding/
-│   │   └── train_gcn.py            # Graph Autoencoder (GCN → 32-dim embeddings)
+│   │   └── train_gcn.py            # Graph Autoencoder (384 → 64 → 32 dim)
 │   │
 │   ├── agent/
-│   │   ├── agent.py                # ReAct agent with 4-tool function calling
-│   │   ├── neo4j_query.py          # Cypher/BFS query functions
-│   │   └── prompts.py              # Prompt templates (routing, extraction, etc.)
+│   │   ├── agent.py                # ReAct agent — 4 tools, dual LLM, self-reflection
+│   │   ├── neo4j_query.py          # Cypher / BFS / community query functions
+│   │   └── prompts.py              # All LLM prompt templates
 │   │
 │   ├── api/
-│   │   └── main.py                 # FastAPI REST endpoints
+│   │   └── main.py                 # FastAPI REST API + LRU session management
 │   │
 │   ├── ui/
-│   │   └── app.py                  # Streamlit chat interface
+│   │   └── app.py                  # Streamlit chat UI (dark theme, custom CSS)
 │   │
 │   └── utils/
-│       └── logger.py               # Structured logging utility
+│       └── logger.py               # Structured logging to file + console
 │
 ├── scripts/
 │   ├── discover_urls.py            # Microsoft Learn URL discovery
-│   ├── generate_testset.py         # LLM-generated test set (stratified)
-│   ├── evaluate.py                 # Hit@K, MRR, ROUGE-L evaluation
-│   ├── generate_finetune_data.py   # Finetune data generation
+│   ├── generate_testset.py         # LLM-generated stratified test set
+│   ├── evaluate.py                 # Hit@K, MRR, ROUGE-L evaluation vs BM25
+│   ├── generate_finetune_data.py   # Domain entity pairs for contrastive training
 │   └── finetune_retriever.py       # Sentence-transformer finetuning
 │
 ├── data/
@@ -469,84 +501,90 @@ it-helpdesk-kbqa/
 │   ├── processed/                  # Extracted entities (gitignored)
 │   ├── discovered_urls.json        # 378 article URLs
 │   ├── communities.json            # Leiden community assignments
-│   ├── community_summaries.json    # LLM summaries per community
+│   ├── community_summaries.json    # LLM summaries per community (required at runtime)
 │   ├── test_set.json               # 50-question evaluation set
 │   └── eval_results.json           # Latest evaluation metrics
 │
 ├── models/
-│   ├── embeddings/                 # GCN node embeddings (32-dim)
-│   ├── gcn_checkpoint/             # GAE model weights
+│   ├── embeddings/                 # GCN node embeddings (32-dim, L2-normalized)
+│   │   ├── node_embeddings.npy
+│   │   ├── idx_to_name.json
+│   │   ├── name_to_idx.json
+│   │   └── node_semantic_embeddings.npy   # optional — finetuned retriever
+│   ├── gcn_checkpoint/             # GAE model weights (best checkpoint)
 │   └── retriever/                  # Finetuned sentence-transformer (optional)
 │
 ├── configs/
-│   └── scraper.yaml                # Scraper configuration
+│   └── scraper.yaml                # Scraper settings (delays, retries, cache)
 │
-├── docker-compose.yml              # 2-service deployment (API + UI)
-├── Dockerfile.api                  # FastAPI container
+├── docker-compose.yml              # 2-service orchestration (api + ui)
+├── Dockerfile.api                  # FastAPI container (python:3.11-slim)
 ├── Dockerfile.ui                   # Streamlit container
-├── requirements.txt                # Python dependencies
-└── .env.example                    # Environment template
+├── requirements.txt                # Full dependency set (~50 packages)
+├── requirements-ui.txt             # UI-only minimal dependencies
+└── .env.example                    # Environment variable template
 ```
 
 ---
 
-## 🐳 Deployment
+## Deployment
 
-The system is containerized via Docker Compose with **2 services**:
+Two Docker services orchestrated by Compose:
 
 | Service | Container | Port | Description |
 |---|---|---|---|
-| `api` | `kbqa_api` | 8000 | FastAPI + Agent + Neo4j client |
+| `api` | `kbqa_api` | 8000 | FastAPI + ReAct Agent + Neo4j driver |
 | `ui` | `kbqa_ui` | 8501 | Streamlit chat frontend |
 
 ```bash
 docker-compose up --build
 ```
 
-- The `ui` service waits for `api` to be healthy before starting (`depends_on: condition: service_healthy`)
-- Neo4j AuraDB is a managed cloud service — no local database container needed
-- Logs are mounted to `./logs` for persistence
+- The `ui` service waits for `api` to pass its health check before starting (`depends_on: condition: service_healthy`)
+- Neo4j AuraDB is managed cloud — no local database container needed
+- `models/` is **not gitignored** by design so trained embeddings ship with the image
 
 ---
 
-## 🔧 Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| **LLM** | Groq Cloud — LLaMA 3.1 8B Instant |
-| **Graph Database** | Neo4j AuraDB (free tier) |
-| **Graph ML** | PyTorch Geometric — GCN Autoencoder |
-| **Embeddings** | Sentence-Transformers (all-MiniLM-L6-v2 / finetuned) |
-| **Community Detection** | graspologic — Leiden algorithm |
-| **Entity Matching** | rapidfuzz (fuzzy) / finetuned retriever (semantic) |
+| **LLM — Reasoning** | Groq Cloud · LLaMA 3.3 70B Versatile (function-calling, synthesis, reflection) |
+| **LLM — Utility** | Groq Cloud · LLaMA 3.1 8B Instant (ambiguity check, topic change, planning) |
+| **Graph Database** | Neo4j AuraDB (cloud, free tier) |
+| **Graph ML** | PyTorch Geometric · Graph Autoencoder (GCNConv 384→64→32) |
+| **Embeddings** | sentence-transformers · all-MiniLM-L6-v2 (base) / finetuned domain model |
+| **Community Detection** | graspologic · Leiden algorithm |
+| **Entity Matching** | rapidfuzz (fuzzy, threshold 75) / finetuned retriever (semantic) |
 | **API** | FastAPI 0.110 + Uvicorn |
-| **Frontend** | Streamlit with custom CSS dark theme |
+| **Frontend** | Streamlit 1.35+ with custom CSS dark theme |
 | **Web Search** | Tavily API |
-| **Evaluation** | rank-bm25, rouge-score |
+| **Web Scraping** | BeautifulSoup4 4.14 + lxml 6.1 |
+| **Evaluation** | rank-bm25 · rouge-score |
 | **Deployment** | Docker Compose (2 services) |
-| **Web Scraping** | BeautifulSoup4 + lxml |
 
 ---
 
-## 👥 Team
+## Team
 
 | Role | Responsibilities |
 |---|---|
-| **A — Data & Infrastructure** | Web scraper, data pipeline, Docker deployment |
-| **B — Knowledge Graph** | Neo4j schema, graph loader, GCN training, Streamlit UI |
-| **C — Agent & LLM** | Entity extraction, ReAct agent, 4-tool integration |
-| **D — Evaluation & Report** | Test set generation, metrics, academic report & slides |
+| **Data & Infrastructure** | Web scraper, data pipeline, Docker deployment |
+| **Knowledge Graph** | Neo4j schema, graph loader, GCN training, Streamlit UI |
+| **Agent & LLM** | Entity extraction, ReAct agent, 4-tool integration, self-reflection |
+| **Evaluation & Report** | Test set generation, metrics, academic report & slides |
 
 ---
 
-## 📄 License
+## License
 
-This project was developed as part of the **NLP for Enterprise** course at **VNU-HCMUS** (University of Science, Ho Chi Minh City).
+Developed as part of the **NLP for Enterprise** course at **VNU-HCMUS** (University of Science, Ho Chi Minh City).
 
 ---
 
 <div align="center">
 
-*Built with ❤️ using Knowledge Graphs, Graph Neural Networks, and Agentic AI*
+*Built with Knowledge Graphs, Graph Neural Networks, and Agentic AI*
 
 </div>

@@ -43,7 +43,8 @@ _RE_ERROR_CODE = re.compile(
 )
 _RE_WEBSEARCH = re.compile(
     r'\b(latest|newest|recent|update|patch|release|version)\b.*\b(24H2|23H2|2[0-9]{3})\b'
-    r'|\b(24H2|23H2)\b',  # Windows build codes thì ok match thẳng
+    r'|\b(24H2|23H2)\b'   # Windows build codes thì ok match thẳng
+    r'|\b(20[2-9][0-9])\b',  # standalone year (2020–2029) → likely version-specific query
     re.IGNORECASE,
 )
 _RE_FOLLOWUP = re.compile(
@@ -324,7 +325,7 @@ class ITHelpdeskAgent:
         logger.info("Conversation history reset")
 
     def _detect_topic_change(self, question: str) -> bool:
-        if not self.history:
+        if len(self.history) < 2:
             return False
         prev_question = self.history[-2]["content"]
         result = llm_call(
@@ -358,7 +359,7 @@ class ITHelpdeskAgent:
         tool_used: str,
     ) -> dict:
         """Self-evaluate the generated answer; return confidence metadata."""
-        _default = {"is_sufficient": False, "confidence": "medium", "reason": "Reflection parse failed"}
+        _default = {"is_sufficient": True, "confidence": "medium", "reason": "Reflection parse failed"}
         if not answer_text:
             return {"is_sufficient": False, "confidence": "low", "reason": "Empty answer"}
         try:
@@ -714,24 +715,32 @@ class ITHelpdeskAgent:
             len(result["sources"]),
             result["tool_used"],
         )
+        final_confidence = reflection["confidence"]
+        final_reason     = reflection["reason"]
+
         if not reflection["is_sufficient"] and result.get("observations"):
             synthesis = "\n\n---\n\n".join(result["observations"])
+            hint = reflection["reason"]
             new_answer = llm_call(
                 self.client,
                 f"Based on the findings below, give a concise actionable answer.\n\n"
-                f"Question: {question}\n\nFindings:\n{synthesis}",
+                f"Question: {question}\n\nFindings:\n{synthesis}\n\n"
+                f"Note: A previous answer was flagged as insufficient because: {hint}\n"
+                f"Make sure to address this specifically.",
                 max_tokens=512,
                 model=_MODEL_STRONG,
             )
             if new_answer:
                 result["answer"] = new_answer
+                final_confidence = "medium"
+                final_reason     = f"[Re-synthesized] {hint}"
                 logger.info("Reflection triggered re-synthesis")
             else:
                 logger.warning("Re-synthesis returned None; keeping original answer")
 
         result["plan_note"]         = plan_note
-        result["confidence"]        = reflection["confidence"]
-        result["reflection_reason"] = reflection["reason"]
+        result["confidence"]        = final_confidence
+        result["reflection_reason"] = final_reason
 
         self.history.append({"role": "user",      "content": question})
         self.history.append({"role": "assistant",  "content": result["answer"]})

@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from contextlib import asynccontextmanager
-from typing import Optional
-
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -121,7 +119,7 @@ async def query(request: QueryRequest):
 
     try:
         session_agent = await get_or_create_session(request.session_id)
-        result = session_agent.answer(request.question)
+        result = await asyncio.to_thread(session_agent.answer, request.question)
 
         return QueryResponse(
             question=result["question"],
