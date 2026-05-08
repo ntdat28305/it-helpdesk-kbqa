@@ -43,6 +43,9 @@ tavily-python>=0.3.0
 rank-bm25>=0.2.2
 rouge-score>=0.1.2
 
+# ── Pipeline (community detection) ───────────────────────────
+graspologic>=0.3.0
+
 # ── GCN Training & Retriever Finetuning ──────────────────────
 torch>=2.1.0
 torch-geometric>=2.4.0
