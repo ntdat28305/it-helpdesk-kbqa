@@ -170,7 +170,9 @@ def _get_groq_client():
     global _groq_client
     if _groq_client is None:
         from groq import Groq
-        _groq_client = Groq(api_key=os.getenv("GROQ_API_KEY_1"))
+        # Use KEY_2 to avoid competing with the agent which uses KEY_1
+        api_key = os.getenv("GROQ_API_KEY_2") or os.getenv("GROQ_API_KEY_1")
+        _groq_client = Groq(api_key=api_key)
     return _groq_client
 
 

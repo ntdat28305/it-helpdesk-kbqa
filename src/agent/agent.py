@@ -595,9 +595,8 @@ class ITHelpdeskAgent:
                 obs_content = obs
                 if any(obs.startswith(m) for m in _EMPTY_OBS):
                     obs_content = (
-                        obs + "\n\n[Hint: previous search returned no results. "
-                        "Try rephrasing the entity with broader or more specific terms. "
-                        "Only switch to web_search if the question is about a recent update or version-specific issue.]"
+                        obs + "\n\n[Hint: previous tool returned no results. "
+                        "Try a different tool or rephrase the entity more broadly.]"
                     )
                 messages.append({
                     "role":         "tool",
