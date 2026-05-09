@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 import uuid
 from collections import defaultdict
 from pathlib import Path
@@ -81,8 +82,9 @@ def agent_search(
     question: str,
     url_to_id: dict,
     session_id: str,
-) -> tuple[list[str], str, str]:
-    """Trả về (article_ids, tool_used, answer_text)."""
+) -> dict:
+    """Query the agent API. Returns dict: article_ids, tool_used, answer, latency, steps_count."""
+    start = time.time()
     try:
         resp = requests.post(
             f"{API_URL}/query",
@@ -90,18 +92,32 @@ def agent_search(
             timeout=90,
         )
         resp.raise_for_status()
-        data       = resp.json()
-        tool_used  = data.get("tool_used", "UNKNOWN")
-        answer     = data.get("answer", "")
-        sources    = data.get("sources", [])
+        data        = resp.json()
+        latency     = time.time() - start
+        tool_used   = data.get("tool_used", "UNKNOWN")
+        answer      = data.get("answer", "")
+        sources     = data.get("sources", [])
+        steps_count = len(data.get("steps", []) or [])
         article_ids = [
             url_to_id.get(url, url.rstrip("/").split("/")[-1])
             for url in sources
         ]
-        return article_ids, tool_used, answer
+        return {
+            "article_ids": article_ids,
+            "tool_used":   tool_used,
+            "answer":      answer,
+            "latency":     latency,
+            "steps_count": steps_count,
+        }
     except Exception as e:
         print(f"  API error: {e}")
-        return [], "ERROR", ""
+        return {
+            "article_ids": [],
+            "tool_used":   "ERROR",
+            "answer":      "",
+            "latency":     time.time() - start,
+            "steps_count": 0,
+        }
 
 
 # ── Metrics ───────────────────────────────────────────────────
