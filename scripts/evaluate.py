@@ -201,6 +201,31 @@ def compute_bert_score(predictions: list[str], references: list[str]) -> float |
         return None
 
 
+def compute_tool_accuracy(results: list[dict], test_set: list[dict]) -> dict:
+    """Compare tool_used vs expected_tool. Skips entries without expected_tool field."""
+    correct   = 0
+    total     = 0
+    confusion: dict[tuple[str, str], int] = {}
+
+    for qa, result in zip(test_set, results):
+        expected = qa.get("expected_tool")
+        if not expected:
+            continue
+        actual = result.get("tool_used", "")
+        total += 1
+        if actual == expected:
+            correct += 1
+        key = (expected, actual)
+        confusion[key] = confusion.get(key, 0) + 1
+
+    return {
+        "accuracy":  correct / total if total else 0.0,
+        "correct":   correct,
+        "total":     total,
+        "confusion": {f"{e}->{a}": c for (e, a), c in sorted(confusion.items())},
+    }
+
+
 # ── Evaluation pipeline ───────────────────────────────────────
 
 def evaluate():
