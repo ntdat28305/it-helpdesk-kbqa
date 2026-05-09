@@ -261,11 +261,20 @@ def evaluate():
     # Accumulators
     bm25_h1 = bm25_h5 = bm25_mrr = 0.0
     ag_h1 = ag_h5 = ag_mrr = ag_rl = 0.0
+    latencies:       list[float] = []
+    step_counts:     list[int]   = []
+    judge_scores:    list[int]   = []
+    all_predictions: list[str]   = []
+    all_references:  list[str]   = []
+    all_results:     list[dict]  = []
+
     tool_stats: dict[str, dict] = defaultdict(
-        lambda: {"h1": 0.0, "h5": 0.0, "mrr": 0.0, "rl": 0.0, "count": 0}
+        lambda: {"h1": 0.0, "h5": 0.0, "mrr": 0.0, "rl": 0.0, "count": 0,
+                 "judge_sum": 0.0, "judge_n": 0}
     )
     cat_stats: dict[str, dict] = defaultdict(
-        lambda: {"h1": 0.0, "mrr": 0.0, "rl": 0.0, "count": 0}
+        lambda: {"h1": 0.0, "mrr": 0.0, "rl": 0.0, "count": 0,
+                 "judge_sum": 0.0, "judge_n": 0}
     )
 
     print(f"\nEvaluating {n} questions...\n")
@@ -287,7 +296,17 @@ def evaluate():
 
         # Agent — session ID gắn run_id để không bị contaminate
         session_id = f"eval_{run_id}_{i}"
-        ag_results, tool_used, ag_answer = agent_search(question, url_to_id, session_id)
+        result     = agent_search(question, url_to_id, session_id)
+
+        ag_results  = result["article_ids"]
+        tool_used   = result["tool_used"]
+        ag_answer   = result["answer"]
+
+        latencies.append(result["latency"])
+        step_counts.append(result["steps_count"])
+        all_predictions.append(ag_answer)
+        all_references.append(ref_answer)
+        all_results.append(result)
 
         h1 = hit_at_k(ag_results, article_id, 1)
         h5 = hit_at_k(ag_results, article_id, 5)
@@ -298,6 +317,15 @@ def evaluate():
         ag_h5  += h5
         ag_mrr += rr
         ag_rl  += rl
+
+        # LLM-as-Judge
+        judge_score = llm_judge(question, ref_answer, ag_answer)
+        if judge_score is not None:
+            judge_scores.append(judge_score)
+            tool_stats[tool_used]["judge_sum"] += judge_score
+            tool_stats[tool_used]["judge_n"]   += 1
+            cat_stats[category]["judge_sum"]   += judge_score
+            cat_stats[category]["judge_n"]     += 1
 
         tool_stats[tool_used]["h1"]    += h1
         tool_stats[tool_used]["h5"]    += h5
@@ -310,8 +338,11 @@ def evaluate():
         cat_stats[category]["rl"]    += rl
         cat_stats[category]["count"] += 1
 
-        rl_str = f"ROUGE-L={rl:.2f}"
-        print(f"  [{tool_used}] Hit@1={h1:.0f}  MRR={rr:.2f}  {rl_str}  | {ag_results[:2]}")
+        judge_str = f"Judge={judge_score}" if judge_score is not None else "Judge=N/A"
+        print(
+            f"  [{tool_used}] Hit@1={h1:.0f}  MRR={rr:.2f}  "
+            f"ROUGE-L={rl:.2f}  {judge_str}  {result['latency']:.1f}s"
+        )
 
     # ── Summary ───────────────────────────────────────────────
     print("\n" + "=" * 65)
