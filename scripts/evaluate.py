@@ -5,6 +5,11 @@ scripts/evaluate.py
 Metrics:
   - Hit@1, Hit@5, MRR  — retrieval (có tìm đúng article không)
   - ROUGE-L             — answer quality (so sánh với reference answer)
+  - LLM-as-Judge        — answer correctness via Groq (llama-3.3-70b-versatile)
+  - BERT-Score F1       — semantic similarity (roberta-large)
+  - Tool Accuracy       — tỷ lệ agent chọn đúng tool (requires expected_tool in test_set)
+  - Latency p50/p95     — performance monitoring
+  - Avg/Max Steps       — agent behavior analysis
 
 Chạy:
     python scripts/evaluate.py
@@ -156,13 +161,25 @@ Rate the agent's answer on a scale of 1-5:
 Output ONLY the number (1-5):"""
 
 
+# Lazy singleton Groq client to avoid recreating connections per evaluation
+_groq_client: object = None
+
+
+def _get_groq_client():
+    """Get or create cached Groq client."""
+    global _groq_client
+    if _groq_client is None:
+        from groq import Groq
+        _groq_client = Groq(api_key=os.getenv("GROQ_API_KEY_1"))
+    return _groq_client
+
+
 def llm_judge(question: str, reference: str, agent_answer: str) -> int | None:
     """Score agent answer 1-5 using Groq LLM. Returns None on empty input or API failure."""
     if not agent_answer or not reference:
         return None
-    from groq import Groq
-    client = Groq(api_key=os.getenv("GROQ_API_KEY_1"))
     try:
+        client = _get_groq_client()
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": JUDGE_PROMPT.format(
@@ -173,8 +190,9 @@ def llm_judge(question: str, reference: str, agent_answer: str) -> int | None:
             temperature=0,
             max_tokens=5,
         )
-        score = int(resp.choices[0].message.content.strip()[0])
-        return min(max(score, 1), 5)
+        content = resp.choices[0].message.content.strip()
+        m = re.search(r"[1-5]", content)
+        return int(m.group()) if m else None
     except Exception:
         return None
 
@@ -253,6 +271,9 @@ def evaluate():
     else:
         print("WARNING: data/raw/ empty — skipping BM25 baseline")
         url_to_id = {}
+
+    if not os.getenv("GROQ_API_KEY_1"):
+        print("WARNING: GROQ_API_KEY_1 not set — LLM-Judge will be skipped (all scores = N/A)")
 
     # Unique run ID để tránh session contamination khi chạy nhiều lần
     run_id = uuid.uuid4().hex[:8]
