@@ -43,6 +43,7 @@ tavily-python>=0.3.0
 rank-bm25>=0.2.2
 rouge-score>=0.1.2
 bert-score>=0.3.13
+openai>=1.30.0
 
 # ── Pipeline (community detection) ───────────────────────────
 graspologic>=0.3.0
