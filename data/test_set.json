@@ -3,294 +3,343 @@
     "question": "I assigned a certificate to my devices through Intune, but they're not getting it. What's going on?",
     "answer": "Check the IIS logs on the computer running the Intune NDES Connector for HTTP 500 error entries, which may indicate the issue. You can try resolving these errors to fix the certificate profile status.",
     "article_id": "certificateregistrationsvc-verify-request-error",
-    "category": "DeviceMgmt"
+    "category": "DeviceMgmt",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I updated an app on my work phone but it won't install, what's going on?",
     "answer": "Try reinstalling the app from the Company Portal on your device to fix the issue.",
     "article_id": "app-installation-failed-error",
-    "category": "DeviceMgmt"
+    "category": "DeviceMgmt",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to set up my work computer, but it keeps asking me for permission to access the Enrollment Status Page. What's going on?",
     "answer": "Try changing directories or signing in to see if that resolves the issue. If not, you can also try collecting ESP logs to get more information about the problem.",
     "article_id": "understand-troubleshoot-esp",
-    "category": "DeviceMgmt"
+    "category": "DeviceMgmt",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I just deployed a new browser policy to my company devices, but the Intune console is showing an error message. Is this a problem I need to fix?",
     "answer": "No, this error can be safely ignored as it doesn't affect the performance or behavior of the Intune Managed Browser. The error will go away after the device checks in again.",
     "article_id": "managed-browser-policy-triggers-error-0x87d1fde8",
-    "category": "DeviceMgmt"
+    "category": "DeviceMgmt",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to sign in to my work account but I keep getting an error message saying there's an unexpected problem. What could be the issue?",
     "answer": "It's possible that your account doesn't have the necessary license assigned. Try checking with your IT department to see if you have an Intune license assigned to your account.",
     "article_id": "intune-connector-signin-unexpected-error",
-    "category": "DeviceMgmt"
+    "category": "DeviceMgmt",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm having trouble connecting to the internet on my work computer, what could be the problem?",
     "answer": "Try installing the latest root certificates to resolve the issue. You can use the Microsoft Update Catalog to find the latest root certificate updates.",
     "article_id": "fix-connectivity-issues",
-    "category": "DeviceMgmt"
+    "category": "DeviceMgmt",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm having trouble accessing certain settings on my work computer, is there a way to get them working?",
     "answer": "You can try deploying a custom OMA-URI profile that uses a Windows Configuration Service Provider (CSP) to access these settings.",
     "article_id": "deploy-oma-uris-to-target-csp-via-intune",
-    "category": "DeviceMgmt"
+    "category": "DeviceMgmt",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to access company resources on my device but it keeps saying I need to update my enrollment, but it won't let me update it. What's going on?",
     "answer": "Try updating the Company Portal app on your device to the latest version, as an outdated version may be causing the issue.",
     "article_id": "cannot-update-enrollment",
-    "category": "DeviceMgmt"
+    "category": "DeviceMgmt",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to create a duplicate of my Windows 10 computer, but it keeps showing up as already enrolled in our company's device management system. What's going on?",
     "answer": "This issue is likely due to the MDM enrollment not being properly removed during the Sysprep process. Try running the Sysprep tool again, and then manually remove the MDM enrollment before creating the duplicate.",
     "article_id": "troubleshoot-sysprep-windows-10-device-enrolled-mdm",
-    "category": "DeviceMgmt"
+    "category": "DeviceMgmt",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to set up my work device with Intune, but it's not working. What should I do first?",
     "answer": "Check that you've properly configured Intune to enable enrollment by following the setup instructions in our documentation.",
     "article_id": "troubleshoot-device-enrollment-in-intune",
-    "category": "DeviceMgmt"
+    "category": "DeviceMgmt",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "My Windows 10 device stopped syncing with my work account after a few days, what's going on?",
     "answer": "Try checking if the Device Management Wireless Application Protocol (dmwappushservice) service is enabled on your device, as it might have been disabled by a script or update.",
     "article_id": "cannot-sync-windows-10-devices",
-    "category": "DeviceMgmt"
+    "category": "DeviceMgmt",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to sign in to my work app but I keep getting an error message saying the server can't find the page I'm looking for. What's going on?",
     "answer": "Check the web.config file for your app to make sure the Policy Name setting for sign-in is correct. If it's missing or incorrect, update it to resolve the issue.",
     "article_id": "3092592",
-    "category": "Identity"
+    "category": "Identity",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to work from home but I'm not sure how to access Microsoft Teams with my work account, can you help?",
     "answer": "You can enable your employees to work remotely by using Microsoft Teams with a free E1 license for six months, which can be found at Manage the Office 365 E1 Trial.",
     "article_id": "faq-set-up-enterprise-work-remotely",
-    "category": "Identity"
+    "category": "Identity",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I installed an app from the Google Play Store and now I'm having trouble logging in, what's going on?",
     "answer": "This issue might be caused by a mismatch between the redirect URI in your app's configuration file and the one generated with your app's package name and signature hash. Check your app's registration in the Azure portal to resolve the issue.",
     "article_id": "android-app-authentication-fails-after-published-to-google-play-store",
-    "category": "Identity"
+    "category": "Identity",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to log into my work account on my Android phone but it keeps saying the login page is unsafe, what's going on?",
     "answer": "This issue is likely due to additional certificate downloads being required for Azure Active Directory Authentication Library (ADAL) authentication. Try checking your Security Token Service (STS) server's fully qualified domain name (FQDN) to see if it's the cause of the problem.",
     "article_id": "adal-authenticate-android-devices-fail",
-    "category": "Identity"
+    "category": "Identity",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to install a new work tool but it keeps saying I don't have permission to start a service, what can I do?",
     "answer": "Try assigning domain administrator credentials to the service, and if that doesn't work, you may need to change the Windows service credentials to a group Managed Service Account (gMSA).",
     "article_id": "azure-ad-hybrid-sync-cannot-start-aadconnect-provisioning-agent",
-    "category": "Identity"
+    "category": "Identity",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to join a work project as a guest user but I keep getting an error message when I try to accept the invitation. What's going on?",
     "answer": "This issue might be caused by a mismatch between the issuer URL in the SAML response and the one configured in Microsoft Entra ID. Try checking the invitation details and the Microsoft Entra ID settings to resolve the issue.",
     "article_id": "error-aadsts50107-guest-redemption-fails",
-    "category": "Identity"
+    "category": "Identity",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to access my account info but I keep getting an error message saying I don't have permission, what's going on?",
     "answer": "You need to use a token that's acquired through the authorization code flow, not the client credentials grant flow, to access your account info.",
     "article_id": "error-call-me-endpoint-microsoft-graph",
-    "category": "Identity"
+    "category": "Identity",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to log into my work account but it keeps saying I'm not authenticated, what's going on?",
     "answer": "This issue is likely caused by a problem with Integrated Windows Authentication (IWA) and Microsoft Authentication Library (MSAL). Try checking your Windows settings to ensure that IWA is properly configured.",
     "article_id": "msal-client-exception-failed-to-get-user-name",
-    "category": "Identity"
+    "category": "Identity",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm having trouble logging into my work account from my laptop, but it works fine on my desktop. What's going on?",
     "answer": "This issue might be related to Azure Seamless Single Sign-On configuration, which can cause authentication failures from specific devices. Try checking your device's configuration to see if it's set up correctly.",
     "article_id": "sign-in-office-365-azure-intune-sso-does-not-work",
-    "category": "Identity"
+    "category": "Identity",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I just updated Microsoft Entra Connect and now my work computer is missing from the system, is this normal?",
     "answer": "Yes, this is normal and doesn't affect your ability to access work resources, but if you see multiple devices being deleted, allow the deletions to go through.",
     "article_id": "reference-connect-device-disappearance",
-    "category": "Identity"
+    "category": "Identity",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm getting logged out of my work account every hour, is there a way to stay logged in for longer?",
     "answer": "Yes, you can customize the middleware authentication ticket to extend the user sign-in duration beyond the default one hour expiration of Microsoft Entra ID tokens.",
     "article_id": "customize-authentication-session-expiration",
-    "category": "Identity"
+    "category": "Identity",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm getting an error message when trying to log into my work account through our company's website, it says something about a security token not being valid. What should I do?",
     "answer": "Try checking the application's configuration settings to ensure that the security token issuer matches the one in your Microsoft Entra ID settings.",
     "article_id": "troubleshoot-wif10201-no-validkey-securitytoken-mvc",
-    "category": "Identity"
+    "category": "Identity",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm getting an error message saying the server is unavailable, but I'm trying to access a program on my network. What's going on?",
     "answer": "This issue might be related to a Remote Procedure Call (RPC) error. Try checking the program's settings and ensuring that the RPC service is running on your server.",
     "article_id": "rpc-errors-troubleshooting",
-    "category": "Network"
+    "category": "Network",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to reconnect to a shared drive on my network but I keep getting an error message saying the drive is already in use. What's going on?",
     "answer": "Try changing the registry setting on your server to 0 and rebooting it. This should resolve the issue and allow you to reconnect to the shared drive.",
     "article_id": "system-error-85-net-use-command",
-    "category": "Network"
+    "category": "Network",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I keep getting a message saying my Windows isn't genuine, what's going on?",
     "answer": "Try uninstalling the KB 971033 update, as it may be causing the issue. If you're still experiencing problems, contact your IT department for further assistance.",
     "article_id": "4487266",
-    "category": "Network"
+    "category": "Network",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to uninstall a program but it keeps saying it can't write to the log file, what's going on?",
     "answer": "Try checking if the program's log file location is set to a writable directory, such as your user's Temp folder, and adjust it if necessary.",
     "article_id": "error-opening-installation-log-file",
-    "category": "Software"
+    "category": "Software",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to connect to a server using a high-numbered port, but I keep getting an error message saying my system is out of buffer space. What's going on?",
     "answer": "Try increasing the buffer space on your system by modifying the registry, following the steps outlined in the article 'WSAENOBUFS (10055) error when connecting from TCP ports greater than 5000'.",
     "article_id": "connect-tcp-greater-than-5000-error-wsaenobufs-10055",
-    "category": "Network"
+    "category": "Network",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "My computer keeps saying it can't apply the settings from our company's network at startup, what's going on?",
     "answer": "This issue is likely caused by a temporary network connection problem, try restarting your computer to see if it resolves the issue.",
     "article_id": "fail-to-apply-group-policy-at-startup",
-    "category": "Network"
+    "category": "Network",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I mapped a drive to a network share, but it keeps disconnecting after a while. What's going on?",
     "answer": "This is a normal behavior due to the default time-out period on the shared network computer. To resolve this, you can change the time-out period on the shared network computer to prevent the connection from dropping.",
     "article_id": "mapped-drive-connection-to-network-share-lost",
-    "category": "Network"
+    "category": "Network",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "My computer is sending weird DNS requests after I changed my network settings, is that normal?",
     "answer": "Yes, this is a normal behavior in Windows, and it's not causing any harm. You don't need to take any action, but if you're concerned about performance, you can leave the queries as they are.",
     "article_id": "dns-requests-random-network-properties-change",
-    "category": "Network"
+    "category": "Network",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm using a program that uses my smart card, but it keeps crashing with an error message saying the handle is invalid. What's going on?",
     "answer": "This issue might be caused by the program not being designed to handle high loads, so try closing other resource-intensive programs to see if it resolves the issue.",
     "article_id": "0x6-error-invalid-handle-multithreaded-application",
-    "category": "Network"
+    "category": "Network",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I want to hide some of my computer's drives from view, but I still need to access others. How can I do this?",
     "answer": "You can use Group Policy Objects to hide specific drives while keeping others accessible. You can add restrictions by modifying the System.adm file for the default domain policy or any custom Group Policy Object (GPO).",
     "article_id": "using-group-policy-objects-hide-specified-drives",
-    "category": "Network"
+    "category": "Network",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to remove a network component from my Windows 10 computer but it won't let me, what's going on?",
     "answer": "You can't uninstall the network component directly, but you can effectively remove it by unbinding the driver from your network adapters using the PowerShell cmdlet 'Disable-NetAdapterBinding'.",
     "article_id": "cannot-uninstall-client-for-microsoft-networks",
-    "category": "Network"
+    "category": "Network",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to connect to my work VPN but I keep getting an error message saying the remote computer isn't responding. What's going on?",
     "answer": "Try checking your network firewall settings to make sure they're allowing the necessary traffic for your VPN connection. Specifically, ensure that GRE protocol 47 and TCP traffic on port 1723 are permitted.",
     "article_id": "error-when-establishing-vpn-connection",
-    "category": "Network"
+    "category": "Network",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I opened the Teams app on my computer, but it just opened and then immediately closed - what's going on?",
     "answer": "Check your network configuration to ensure that a firewall or proxy settings aren't blocking Teams client access to the required endpoints.",
     "article_id": "resolve-teams-client-launch-failures",
-    "category": "Teams"
+    "category": "Teams",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to join a meeting from my calendar, but Skype is opening instead of Teams. Why is this happening?",
     "answer": "This issue occurs when the meeting was scheduled with Skype for Business. Try checking the meeting description for a URL that might be triggering Skype to launch.",
     "article_id": "meeting-requires-skype-instead-of-teams",
-    "category": "Teams"
+    "category": "Teams",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to manage my company's phone settings in Microsoft Teams but I keep getting an error message. What's going on?",
     "answer": "It's possible that you don't have the necessary product license to access the dial plan settings. Try checking with your administrator to see if you have the required license.",
     "article_id": "errors-managing-dial-plans",
-    "category": "Teams"
+    "category": "Teams",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I locked my Mac and when I came back, my Teams status was still showing I was offline, but I'm actually online. What's going on?",
     "answer": "This issue might be caused by a stale presence status in Teams for Mac. Try restarting the Teams app to update your presence status.",
     "article_id": "incorrect-presence-status-teams-for-mac",
-    "category": "Teams"
+    "category": "Teams",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to access our company's intranet portal in Microsoft Teams, but it's not showing up as a tab. What's going on?",
     "answer": "Try opening Microsoft Teams in a web browser instead of the desktop app, as this should allow you to access the portal.",
     "article_id": "websites-with-conditional-access-dont-display",
-    "category": "Teams"
+    "category": "Teams",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "My Microsoft Teams Room device is showing a warning message, but it's still working fine. Is this something I should be concerned about?",
     "answer": "No, this warning doesn't affect the overall health status of your device, but you should check the power settings to ensure the 'Maximum processor state' is set to 100%.",
     "article_id": "cpu-performance-limited-status-unhealthy",
-    "category": "Teams"
+    "category": "Teams",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm having trouble with my Android device running Microsoft Teams, how do I get the necessary information to fix the issue?",
     "answer": "To troubleshoot the issue, you'll need to collect diagnostic logs from your Android device. You can do this by going to the Microsoft Teams admin center, selecting the device, and downloading the logs.",
     "article_id": "collect-device-logs",
-    "category": "Teams"
+    "category": "Teams",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to open Microsoft Teams but it's not loading, what's going on?",
     "answer": "Try updating your browser settings by adding the Microsoft Teams URLs to the list of trusted sites, this should resolve the issue.",
     "article_id": "teams-doesnt-load",
-    "category": "Teams"
+    "category": "Teams",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm trying to add a new team member but I keep getting an error message saying I couldn't add them, what's going on?",
     "answer": "Try changing the 'UsersPermissionToReadOtherUsersEnabled' setting in Microsoft Entra ID to True, this should resolve the issue.",
     "article_id": "couldnt-add-member-error",
-    "category": "Teams"
+    "category": "Teams",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm a Teams admin and some users can't schedule meetings between Teams and Outlook, what's going on?",
     "answer": "The issue might be caused by a problematic installation of the Teams Meeting add-in, a switch from classic Teams to new Teams, or because the users' mailboxes are hidden from the Global Address List (GAL). Try troubleshooting and resolving the issue by checking the add-in installation and mailbox visibility.",
     "article_id": "resolve-teams-meeting-add-in-issues",
-    "category": "Teams"
+    "category": "Teams",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm having trouble updating the Teams app on my work computer, it just keeps failing. What can I do?",
     "answer": "Try bulk deploying the Teams client to your device, which should resolve the update failure issue.",
     "article_id": "resolve-teams-client-update-failures",
-    "category": "Teams"
+    "category": "Teams",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I'm having trouble with my Microsoft Teams device, it won't sign in automatically and the app is showing an unhealthy status. What could be the problem?",
     "answer": "The issue might be due to a missing or incorrectly configured local Windows user account named 'Skype'. Try signing in to the device with the Admin account and check if the Skype account exists.",
     "article_id": "meeting-app-status-unhealthy",
-    "category": "Teams"
+    "category": "Teams",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "After I factory reset my work phone, it's asking for a Google account instead of my work email, what's going on?",
     "answer": "If you've enabled the 'Factory reset protection emails' setting in Microsoft Intune, you should enter your work email address to unlock your device after a factory reset.",
     "article_id": "factory-reset-protection-emails-not-enforced",
-    "category": "DeviceMgmt"
+    "category": "DeviceMgmt",
+    "expected_tool": "EMBEDDING"
   },
   {
     "question": "I tried to restore my computer from a backup but it failed and now I can't even turn it on, what's going on?",
     "answer": "Try starting your system in Automatic Repair mode and see if it can fix the issue. If not, you may need to try a different backup location to avoid the error.",
     "article_id": "2989057",
-    "category": "Hardware"
+    "category": "Hardware",
+    "expected_tool": "EMBEDDING"
   }
 ]
