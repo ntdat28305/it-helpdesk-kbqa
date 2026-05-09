@@ -139,6 +139,46 @@ def rouge_l(hypothesis: str, reference: str) -> float:
     return _rouge.score(hypothesis, reference)["rougeL"].fmeasure
 
 
+JUDGE_PROMPT = """\
+You are an IT support expert evaluating answer quality.
+
+Question: {question}
+Reference Answer: {reference}
+Agent Answer: {agent_answer}
+
+Rate the agent's answer on a scale of 1-5:
+1 = Completely wrong or irrelevant
+2 = Partially relevant but mostly incorrect
+3 = Somewhat correct but missing key information
+4 = Mostly correct with minor issues
+5 = Fully correct and comprehensive
+
+Output ONLY the number (1-5):"""
+
+
+def llm_judge(question: str, reference: str, agent_answer: str) -> int | None:
+    """Score agent answer 1-5 using Groq LLM. Returns None on empty input or API failure."""
+    if not agent_answer or not reference:
+        return None
+    from groq import Groq
+    client = Groq(api_key=os.getenv("GROQ_API_KEY_1"))
+    try:
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": JUDGE_PROMPT.format(
+                question=question,
+                reference=reference,
+                agent_answer=agent_answer,
+            )}],
+            temperature=0,
+            max_tokens=5,
+        )
+        score = int(resp.choices[0].message.content.strip()[0])
+        return min(max(score, 1), 5)
+    except Exception:
+        return None
+
+
 # ── Evaluation pipeline ───────────────────────────────────────
 
 def evaluate():
