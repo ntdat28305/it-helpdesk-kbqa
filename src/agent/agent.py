@@ -33,7 +33,7 @@ load_dotenv()
 logger = get_logger(__name__, log_file="logs/agent.log")
 
 MAX_STEPS = 4
-EMBEDDING_FUZZY_THRESHOLD = 75  # rapidfuzz score 0–100; raised from 50 to cut noise
+EMBEDDING_FUZZY_THRESHOLD = 55  # rapidfuzz score 0–100; lowered to improve match rate for vague queries
 MAX_HISTORY_MESSAGES = 40       # hard cap before oldest messages are dropped
 
 # ── Regex patterns for pre-routing ────────────────────────────
@@ -157,7 +157,8 @@ TOOLS = [
             "name": "web_search",
             "description": (
                 "Search the web for recent IT issues, latest Windows updates, or version-specific problems. "
-                "Best for: recent updates, current known issues, specific version numbers."
+                "Best for: recent updates, current known issues, specific version numbers. "
+                "Do NOT use for general symptoms or vague troubleshooting — use embedding_search for those."
             ),
             "parameters": {
                 "type": "object",
@@ -474,8 +475,9 @@ class ITHelpdeskAgent:
             {"role": "user", "content": question},
         ]
 
-        tool_used    = "WEBSEARCH"
-        entity       = ""
+        tool_used       = "WEBSEARCH"
+        tool_first_used = ""   # tracks the first tool chosen (routing decision)
+        entity          = ""
         sources: list[str]      = []
         observations: list[str] = []
         steps:   list[dict]     = []
@@ -561,6 +563,8 @@ class ITHelpdeskAgent:
                     obs, step_sources, step_entity = self._execute_tool(fn_name, args)
 
                 tool_used = _TOOL_NAME_MAP.get(fn_name, "WEBSEARCH")
+                if not tool_first_used:
+                    tool_first_used = tool_used
                 if step_entity:
                     entity = step_entity
                 for s in step_sources:
@@ -591,8 +595,9 @@ class ITHelpdeskAgent:
                 obs_content = obs
                 if any(obs.startswith(m) for m in _EMPTY_OBS):
                     obs_content = (
-                        obs + "\n\n[Hint: previous tool returned no results. "
-                        "Try a different tool or a broader / differently phrased entity.]"
+                        obs + "\n\n[Hint: previous search returned no results. "
+                        "Try rephrasing the entity with broader or more specific terms. "
+                        "Only switch to web_search if the question is about a recent update or version-specific issue.]"
                     )
                 messages.append({
                     "role":         "tool",
@@ -642,7 +647,7 @@ class ITHelpdeskAgent:
 
         return {
             "question":     question,
-            "tool_used":    tool_used,
+            "tool_used":    tool_first_used or tool_used,
             "entity":       entity,
             "answer":       answer_text,
             "sources":      sources,

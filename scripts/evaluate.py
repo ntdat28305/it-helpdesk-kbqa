@@ -318,6 +318,7 @@ def evaluate():
         # Agent — session ID gắn run_id để không bị contaminate
         session_id = f"eval_{run_id}_{i}"
         result     = agent_search(question, url_to_id, session_id)
+        time.sleep(3)  # rate limit buffer between Groq API bursts
 
         ag_results  = result["article_ids"]
         tool_used   = result["tool_used"]
