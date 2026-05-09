@@ -179,6 +179,28 @@ def llm_judge(question: str, reference: str, agent_answer: str) -> int | None:
         return None
 
 
+def compute_bert_score(predictions: list[str], references: list[str]) -> float | None:
+    """Compute BERT-Score F1 (roberta-large) over non-empty prediction/reference pairs.
+    Returns None if bert-score is not installed."""
+    pairs = [(p, r) for p, r in zip(predictions, references) if p and r]
+    if not pairs:
+        return None
+    try:
+        from bert_score import score as bert_score_fn
+        preds, refs = zip(*pairs)
+        _, _, F1 = bert_score_fn(
+            list(preds),
+            list(refs),
+            lang="en",
+            model_type="roberta-large",
+            verbose=False,
+        )
+        return F1.mean().item()
+    except ImportError:
+        print("  WARNING: bert-score not installed — skipping BERT-Score")
+        return None
+
+
 # ── Evaluation pipeline ───────────────────────────────────────
 
 def evaluate():
