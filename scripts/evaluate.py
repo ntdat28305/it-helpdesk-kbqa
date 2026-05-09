@@ -344,20 +344,34 @@ def evaluate():
             f"ROUGE-L={rl:.2f}  {judge_str}  {result['latency']:.1f}s"
         )
 
+    # ── Post-loop metrics ────────────────────────────────────────
+    bert_f1  = compute_bert_score(all_predictions, all_references)
+    tool_acc = compute_tool_accuracy(all_results, test_set)
+
+    latencies_s = sorted(latencies)
+    n_lat   = len(latencies_s)
+    lat_p50 = latencies_s[n_lat // 2]          if n_lat else 0.0
+    lat_p95 = latencies_s[int(n_lat * 0.95)]   if n_lat else 0.0
+    lat_avg = sum(latencies_s) / n_lat          if n_lat else 0.0
+
+    avg_steps  = sum(step_counts) / len(step_counts) if step_counts else 0.0
+    max_steps  = max(step_counts)                    if step_counts else 0
+    judge_avg  = sum(judge_scores) / len(judge_scores) if judge_scores else None
+    judge_n    = len(judge_scores)
+
     # ── Summary ───────────────────────────────────────────────
     print("\n" + "=" * 65)
     print("EVALUATION RESULTS")
     print("=" * 65)
 
     if bm25_available:
-        print(f"\n{'Metric':<12} {'BM25':>8} {'Agent':>8} {'Delta':>8}  ({'%'})")
-        print("-" * 50)
-        metrics = [
-            ("Hit@1",   bm25_h1/n,  ag_h1/n),
-            ("Hit@5",   bm25_h5/n,  ag_h5/n),
-            ("MRR",     bm25_mrr/n, ag_mrr/n),
-        ]
-        for name, b, a in metrics:
+        print(f"\n{'Metric':<12} {'BM25':>8} {'Agent':>8} {'Delta':>8}")
+        print("-" * 44)
+        for name, b, a in [
+            ("Hit@1",  bm25_h1/n,  ag_h1/n),
+            ("Hit@5",  bm25_h5/n,  ag_h5/n),
+            ("MRR",    bm25_mrr/n, ag_mrr/n),
+        ]:
             d    = a - b
             pct  = (d / b * 100) if b > 0 else float("nan")
             pcts = f"{pct:+.1f}%" if b > 0 else "N/A"
@@ -368,64 +382,101 @@ def evaluate():
         for name, val in [("Hit@1", ag_h1/n), ("Hit@5", ag_h5/n), ("MRR", ag_mrr/n)]:
             print(f"{name:<12} {val:>8.3f}")
 
-    print(f"\n{'ROUGE-L':<12} {'—':>8} {ag_rl/n:>8.3f}   (answer quality vs reference)")
+    print(f"\n--- Answer Quality ---")
+    print(f"  {'ROUGE-L':<18} {ag_rl/n:.3f}")
+    bert_str  = f"{bert_f1:.3f}" if bert_f1 is not None else "N/A (not installed)"
+    judge_str = f"{judge_avg:.2f}/5.0  (n={judge_n}/{n} valid)" if judge_avg is not None else "N/A"
+    print(f"  {'BERT-Score F1':<18} {bert_str}")
+    print(f"  {'LLM-Judge avg':<18} {judge_str}")
+
+    print(f"\n--- Agent Quality ---")
+    if tool_acc["total"] > 0:
+        print(f"  Tool Accuracy:  {tool_acc['correct']}/{tool_acc['total']} = {tool_acc['accuracy']:.1%}")
+    else:
+        print(f"  Tool Accuracy:  N/A (no expected_tool annotations)")
+    print(f"  Avg Steps:      {avg_steps:.1f}  (max: {max_steps})")
+
+    print(f"\n--- Performance ---")
+    print(f"  Latency p50:    {lat_p50:.2f}s")
+    print(f"  Latency p95:    {lat_p95:.2f}s")
+    print(f"  Latency avg:    {lat_avg:.2f}s")
+
+    # ── Tool Accuracy confusion ───────────────────────────────
+    if tool_acc["confusion"]:
+        print("\n--- Tool Accuracy Confusion ---")
+        for pair, count in sorted(tool_acc["confusion"].items()):
+            mark = "✓" if pair.split("->")[0] == pair.split("->")[1] else "✗"
+            print(f"  {pair:<28} {count:>3}  {mark}")
 
     # ── Per-tool ──────────────────────────────────────────────
     if tool_stats:
-        print("\n" + "-" * 65)
-        print("PER-TOOL BREAKDOWN")
-        print(f"{'Tool':<12} {'N':>4} {'Hit@1':>7} {'Hit@5':>7} {'MRR':>7} {'ROUGE-L':>9}")
-        print("-" * 50)
+        print("\n--- Per-Tool Breakdown ---")
+        print(f"{'Tool':<12} {'N':>4} {'Hit@1':>7} {'Hit@5':>7} {'MRR':>7} {'ROUGE-L':>9} {'Judge':>7}")
+        print("-" * 60)
         for tool, s in sorted(tool_stats.items()):
             c = s["count"]
+            j = f"{s['judge_sum']/s['judge_n']:.2f}" if s["judge_n"] else "  N/A"
             print(
                 f"{tool:<12} {c:>4} "
                 f"{s['h1']/c:>7.3f} {s['h5']/c:>7.3f} "
-                f"{s['mrr']/c:>7.3f} {s['rl']/c:>9.3f}"
+                f"{s['mrr']/c:>7.3f} {s['rl']/c:>9.3f} {j:>7}"
             )
 
     # ── Per-category ──────────────────────────────────────────
     if len(cat_stats) > 1:
-        print("\n" + "-" * 65)
-        print("PER-CATEGORY BREAKDOWN")
-        print(f"{'Category':<14} {'N':>4} {'Hit@1':>7} {'MRR':>7} {'ROUGE-L':>9}")
-        print("-" * 46)
+        print("\n--- Per-Category Breakdown ---")
+        print(f"{'Category':<14} {'N':>4} {'Hit@1':>7} {'MRR':>7} {'ROUGE-L':>9} {'Judge':>7}")
+        print("-" * 54)
         for cat, s in sorted(cat_stats.items()):
             c = s["count"]
+            j = f"{s['judge_sum']/s['judge_n']:.2f}" if s["judge_n"] else "  N/A"
             print(
                 f"{cat:<14} {c:>4} "
                 f"{s['h1']/c:>7.3f} {s['mrr']/c:>7.3f} "
-                f"{s['rl']/c:>9.3f}"
+                f"{s['rl']/c:>9.3f} {j:>7}"
             )
 
     print("=" * 65)
 
     # ── Save ──────────────────────────────────────────────────
     results: dict = {
-        "run_id":           run_id,
-        "total_questions":  n,
+        "run_id":          run_id,
+        "total_questions": n,
         "agent": {
-            "hit@1":   round(ag_h1/n,  3),
-            "hit@5":   round(ag_h5/n,  3),
-            "mrr":     round(ag_mrr/n, 3),
-            "rouge_l": round(ag_rl/n,  3),
+            "hit@1":             round(ag_h1/n,  3),
+            "hit@5":             round(ag_h5/n,  3),
+            "mrr":               round(ag_mrr/n, 3),
+            "rouge_l":           round(ag_rl/n,  3),
+            "bert_score_f1":     round(bert_f1, 3) if bert_f1 is not None else None,
+            "llm_judge_avg":     round(judge_avg, 3) if judge_avg is not None else None,
+            "llm_judge_n_valid": judge_n,
+            "tool_accuracy":     round(tool_acc["accuracy"], 3),
+            "tool_accuracy_n":   tool_acc["total"],
+            "latency_p50":       round(lat_p50, 3),
+            "latency_p95":       round(lat_p95, 3),
+            "latency_avg":       round(lat_avg, 3),
+            "avg_steps":         round(avg_steps, 2),
+            "max_steps":         max_steps,
         },
+        "tool_accuracy_confusion": tool_acc["confusion"],
         "per_tool": {
             tool: {
-                "count":   s["count"],
-                "hit@1":   round(s["h1"]  / s["count"], 3),
-                "hit@5":   round(s["h5"]  / s["count"], 3),
-                "mrr":     round(s["mrr"] / s["count"], 3),
-                "rouge_l": round(s["rl"]  / s["count"], 3),
+                "count":     s["count"],
+                "hit@1":     round(s["h1"]  / s["count"], 3),
+                "hit@5":     round(s["h5"]  / s["count"], 3),
+                "mrr":       round(s["mrr"] / s["count"], 3),
+                "rouge_l":   round(s["rl"]  / s["count"], 3),
+                "llm_judge": round(s["judge_sum"] / s["judge_n"], 3) if s["judge_n"] else None,
             }
             for tool, s in tool_stats.items()
         },
         "per_category": {
             cat: {
-                "count":   s["count"],
-                "hit@1":   round(s["h1"]  / s["count"], 3),
-                "mrr":     round(s["mrr"] / s["count"], 3),
-                "rouge_l": round(s["rl"]  / s["count"], 3),
+                "count":     s["count"],
+                "hit@1":     round(s["h1"]  / s["count"], 3),
+                "mrr":       round(s["mrr"] / s["count"], 3),
+                "rouge_l":   round(s["rl"]  / s["count"], 3),
+                "llm_judge": round(s["judge_sum"] / s["judge_n"], 3) if s["judge_n"] else None,
             }
             for cat, s in cat_stats.items()
         },
