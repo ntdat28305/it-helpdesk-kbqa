@@ -5,7 +5,7 @@ scripts/evaluate.py
 Metrics:
   - Hit@1, Hit@5, MRR  — retrieval (có tìm đúng article không)
   - ROUGE-L             — answer quality (so sánh với reference answer)
-  - LLM-as-Judge        — answer correctness via Groq (llama-3.3-70b-versatile)
+  - LLM-as-Judge        — answer correctness via Groq (llama-3.1-8b-instant)
   - BERT-Score F1       — semantic similarity (roberta-large)
   - Tool Accuracy       — tỷ lệ agent chọn đúng tool (requires expected_tool in test_set)
   - Latency p50/p95     — performance monitoring
@@ -183,7 +183,7 @@ def llm_judge(question: str, reference: str, agent_answer: str) -> int | None:
     try:
         client = _get_groq_client()
         resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",  # separate rate limit pool from agent's 70b model
             messages=[{"role": "user", "content": JUDGE_PROMPT.format(
                 question=question,
                 reference=reference,
