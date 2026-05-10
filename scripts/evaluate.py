@@ -5,7 +5,7 @@ scripts/evaluate.py
 Metrics:
   - Hit@1, Hit@5, MRR  — retrieval (có tìm đúng article không)
   - ROUGE-L             — answer quality (so sánh với reference answer)
-  - LLM-as-Judge        — answer correctness via DeepSeek (deepseek-chat)
+  - LLM-as-Judge        — answer correctness via Groq (llama-3.1-8b-instant, KEY_2)
   - BERT-Score F1       — semantic similarity (roberta-large)
   - Tool Accuracy       — tỷ lệ agent chọn đúng tool (requires expected_tool in test_set)
   - Latency p50/p95     — performance monitoring
@@ -161,28 +161,28 @@ Rate the agent's answer on a scale of 1-5:
 Output ONLY the number (1-5):"""
 
 
-# Lazy singleton DeepSeek client (OpenAI-compatible)
-_deepseek_client: object = None
+# Lazy singleton Groq client for judge (uses KEY_2 to avoid competing with agent on KEY_1)
+_groq_client: object = None
 
 
-def _get_deepseek_client():
-    """Get or create cached DeepSeek client."""
-    global _deepseek_client
-    if _deepseek_client is None:
-        from openai import OpenAI
-        api_key = os.getenv("DEEPSEEK_API_KEY")
-        _deepseek_client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
-    return _deepseek_client
+def _get_groq_client():
+    """Get or create cached Groq client."""
+    global _groq_client
+    if _groq_client is None:
+        from groq import Groq
+        api_key = os.getenv("GROQ_API_KEY_2") or os.getenv("GROQ_API_KEY_1")
+        _groq_client = Groq(api_key=api_key)
+    return _groq_client
 
 
 def llm_judge(question: str, reference: str, agent_answer: str) -> int | None:
-    """Score agent answer 1-5 using DeepSeek. Returns None on empty input or API failure."""
+    """Score agent answer 1-5 using Groq. Returns None on empty input or API failure."""
     if not agent_answer or not reference:
         return None
     try:
-        client = _get_deepseek_client()
+        client = _get_groq_client()
         resp = client.chat.completions.create(
-            model="deepseek-chat",
+            model="llama-3.1-8b-instant",  # separate rate limit pool from agent's 70b model
             messages=[{"role": "user", "content": JUDGE_PROMPT.format(
                 question=question,
                 reference=reference,
