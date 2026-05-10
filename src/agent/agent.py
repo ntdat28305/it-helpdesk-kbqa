@@ -66,15 +66,25 @@ def _forced_tool(question: str) -> str | None:
 
 SYSTEM_PROMPT = """You are an IT helpdesk assistant with access to a knowledge graph and web search.
 
-Choose the right tool based on the question:
-- cypher_search: specific error codes (0x..., ERROR_XXX, KB numbers) or exact product names
-- embedding_search: vague symptoms, general issues, "not working", "keeps crashing"
-- bfs_search: relationship between two specific IT entities ("what causes X when Y")
-- web_search: recent updates, latest known issues, specific version numbers
+Tool selection rules (apply in ORDER — use the FIRST matching rule):
+1. cypher_search — question contains an explicit error code (0x..., ERROR_XXX, KB numbers, HRESULT)
+2. bfs_search — question asks the relationship between TWO named IT entities ("what causes X when Y")
+3. web_search — question explicitly uses words like "latest", "recent", or names a specific OS build (e.g. 24H2, 23H2) or calendar year
+4. embedding_search — DEFAULT for everything else: vague symptoms, "not working", "keeps failing", troubleshooting, setup issues
+
+Examples:
+- "My smart card is not working" → embedding_search
+- "App won't install after update" → embedding_search
+- "Can't connect to the internet" → embedding_search
+- "ERROR_INVALID_HANDLE when opening app" → cypher_search
+- "What causes Teams to fail when VPN is on?" → bfs_search
+- "Windows 11 24H2 BSOD latest patch" → web_search
+
+When in doubt, use embedding_search — it covers most IT helpdesk questions.
 
 Rules:
 1. Call ONE tool per step — pick the most relevant one first.
-2. If a tool returns no results, try a different tool or rephrase the entity.
+2. If a tool returns no results, try embedding_search with a rephrased entity.
 3. Once you have enough information, provide a concise, actionable answer with steps.
 4. Do NOT keep calling tools if you already have a good answer."""
 
@@ -475,8 +485,8 @@ class ITHelpdeskAgent:
             {"role": "user", "content": question},
         ]
 
-        tool_used       = "WEBSEARCH"
-        tool_first_used = ""   # tracks the first tool chosen (routing decision)
+        tool_used       = "EMBEDDING"   # default if LLM responds without calling any tool
+        tool_first_used = ""            # tracks the first tool chosen (routing decision)
         entity          = ""
         sources: list[str]      = []
         observations: list[str] = []
