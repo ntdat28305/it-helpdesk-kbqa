@@ -1,0 +1,100 @@
+{
+  "run_id": "969055a2",
+  "total_questions": 49,
+  "agent": {
+    "hit@1": 0.02,
+    "hit@5": 0.041,
+    "mrr": 0.036,
+    "rouge_l": 0.085,
+    "bert_score_f1": null,
+    "llm_judge_avg": 2.878,
+    "llm_judge_n_valid": 49,
+    "tool_accuracy": 0.347,
+    "tool_accuracy_n": 49,
+    "latency_p50": 3.242,
+    "latency_p95": 42.393,
+    "latency_avg": 12.591,
+    "avg_steps": 1.31,
+    "max_steps": 4
+  },
+  "tool_accuracy_confusion": {
+    "EMBEDDING->BFS": 1,
+    "EMBEDDING->EMBEDDING": 17,
+    "EMBEDDING->WEBSEARCH": 31
+  },
+  "per_tool": {
+    "EMBEDDING": {
+      "count": 17,
+      "hit@1": 0.059,
+      "hit@5": 0.118,
+      "mrr": 0.105,
+      "rouge_l": 0.133,
+      "llm_judge": 3.647
+    },
+    "BFS": {
+      "count": 1,
+      "hit@1": 0.0,
+      "hit@5": 0.0,
+      "mrr": 0.0,
+      "rouge_l": 0.088,
+      "llm_judge": 4.0
+    },
+    "WEBSEARCH": {
+      "count": 31,
+      "hit@1": 0.0,
+      "hit@5": 0.0,
+      "mrr": 0.0,
+      "rouge_l": 0.059,
+      "llm_judge": 2.419
+    }
+  },
+  "per_category": {
+    "DeviceMgmt": {
+      "count": 12,
+      "hit@1": 0.083,
+      "mrr": 0.144,
+      "rouge_l": 0.11,
+      "llm_judge": 3.583
+    },
+    "Identity": {
+      "count": 12,
+      "hit@1": 0.0,
+      "mrr": 0.005,
+      "rouge_l": 0.105,
+      "llm_judge": 3.083
+    },
+    "Network": {
+      "count": 11,
+      "hit@1": 0.0,
+      "mrr": 0.0,
+      "rouge_l": 0.071,
+      "llm_judge": 2.273
+    },
+    "Software": {
+      "count": 1,
+      "hit@1": 0.0,
+      "mrr": 0.0,
+      "rouge_l": 0.1,
+      "llm_judge": 3.0
+    },
+    "Teams": {
+      "count": 12,
+      "hit@1": 0.0,
+      "mrr": 0.0,
+      "rouge_l": 0.052,
+      "llm_judge": 2.5
+    },
+    "Hardware": {
+      "count": 1,
+      "hit@1": 0.0,
+      "mrr": 0.0,
+      "rouge_l": 0.091,
+      "llm_judge": 3.0
+    }
+  },
+  "bm25": {
+    "hit@1": 0.347,
+    "hit@5": 0.469,
+    "mrr": 0.398
+  }
+}
