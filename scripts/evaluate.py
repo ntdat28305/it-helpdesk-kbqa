@@ -318,8 +318,13 @@ def evaluate():
 
         # Agent — session ID gắn run_id để không bị contaminate
         session_id = f"eval_{run_id}_{i}"
+        q_start    = time.time()
         result     = agent_search(question, url_to_id, session_id)
-        time.sleep(3)  # rate limit buffer between Groq API bursts
+        # Adaptive sleep: llama-3.3-70b-versatile has 12K TPM on KEY_1.
+        # Each question uses ~3K tokens → max ~4 q/min safe.
+        # Ensure minimum 15s per question cycle regardless of API speed.
+        elapsed = time.time() - q_start
+        time.sleep(max(0, 15 - elapsed))
 
         ag_results  = result["article_ids"]
         tool_used   = result["tool_used"]
