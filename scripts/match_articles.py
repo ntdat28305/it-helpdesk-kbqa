@@ -109,18 +109,20 @@ def build_or_load_embeddings(
     articles: list[dict],
     cache_file: Path,
     model_name: str,
+    model=None,  # optional pre-built SentenceTransformer
 ) -> np.ndarray:
     current_ids = [a["article_id"] for a in articles]
     if cache_file.exists():
-        data = np.load(cache_file, allow_pickle=False)
-        if data["article_ids"].tolist() == current_ids:
-            print(f"Loaded embeddings from cache ({len(articles)} articles)")
-            return data["embeddings"]
+        with np.load(cache_file, allow_pickle=False) as data:
+            if data["article_ids"].tolist() == current_ids:
+                print(f"Loaded embeddings from cache ({len(articles)} articles)")
+                return data["embeddings"].copy()
         print("Cache stale (article list changed) — rebuilding...")
 
     print(f"Building embeddings for {len(articles)} articles (model: {model_name})...")
-    from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer(model_name)
+    if model is None:
+        from sentence_transformers import SentenceTransformer
+        model = SentenceTransformer(model_name)
     texts = [a["title"] + " " + a["text"][:512] for a in articles]
     embeddings = model.encode(texts, normalize_embeddings=True, show_progress_bar=True)
 
@@ -186,9 +188,9 @@ def run(
     article_embeddings = None
     embed_model_obj = None
     try:
-        article_embeddings = build_or_load_embeddings(articles, CACHE_FILE, embed_model)
         from sentence_transformers import SentenceTransformer
         embed_model_obj = SentenceTransformer(embed_model)
+        article_embeddings = build_or_load_embeddings(articles, CACHE_FILE, embed_model, model=embed_model_obj)
         use_embeddings = True
     except ImportError:
         print("WARNING: sentence-transformers not installed — falling back to BM25-only")
