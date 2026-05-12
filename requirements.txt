@@ -9,3 +9,15 @@ bert-score
 rapidfuzz
 torch
 transformers
+fastapi
+uvicorn
+streamlit
+tavily-python
+neo4j
+lxml
+beautifulsoup4
+httpx
+pydantic
+tqdm
+torch-geometric
+graspologic

@@ -68,7 +68,7 @@ def clean(
         scored = sorted(
             candidates,
             key=lambda c: c.get("hybrid_score", c.get("score", 0)) * 0.7
-                          + title_keyword_overlap(question, c["title"]) * 100 * 0.3,
+                          + title_keyword_overlap(question, c["title"]) * 0.3,
             reverse=True,
         )
         best = scored[0]
