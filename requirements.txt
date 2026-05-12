@@ -1,53 +1,11 @@
-# ── Core runtime ─────────────────────────────────────────────
-annotated-types==0.7.0
-anyio==4.13.0
-beautifulsoup4==4.14.3
-certifi==2026.4.22
-cffi==2.0.0
-charset-normalizer==3.4.7
-colorama==0.4.6
-cryptography==47.0.0
-distro==1.9.0
-groq==1.2.0
-h11==0.16.0
-httpcore==1.0.9
-httpx==0.28.1
-idna==3.13
-lxml==6.1.0
-neo4j==6.1.0
-numpy>=1.24.0
-pycparser==3.0
-pydantic==2.13.3
-pydantic_core==2.46.3
-pyparsing==3.3.2
-python-dotenv==1.2.2
-PyYAML==6.0.3
-rapidfuzz==3.6.1
-requests==2.33.1
-sniffio==1.3.1
-soupsieve==2.8.3
-tqdm==4.67.3
-typing-inspection==0.4.2
-typing_extensions==4.15.0
-urllib3==2.6.3
-
-# ── API & UI ──────────────────────────────────────────────────
-fastapi==0.110.0
-uvicorn[standard]==0.27.1
-streamlit>=1.35.0
-
-# ── Web search ────────────────────────────────────────────────
-tavily-python>=0.3.0
-
-# ── Evaluation ────────────────────────────────────────────────
-rank-bm25>=0.2.2
-rouge-score>=0.1.2
-bert-score>=0.3.13
-
-# ── Pipeline (community detection) ───────────────────────────
-graspologic>=0.3.0
-
-# ── GCN Training & Retriever Finetuning ──────────────────────
-torch>=2.1.0
-torch-geometric>=2.4.0
-sentence-transformers>=2.7.0
+rouge-score
+rank-bm25
+sentence-transformers
+numpy
+requests
+python-dotenv
+groq
+bert-score
+rapidfuzz
+torch
+transformers
