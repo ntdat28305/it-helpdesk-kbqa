@@ -117,7 +117,7 @@ def build_or_load_embeddings(
             if data["article_ids"].tolist() == current_ids:
                 print(f"Loaded embeddings from cache ({len(articles)} articles)")
                 return data["embeddings"].copy()
-        print("Cache stale (article list changed) — rebuilding...")
+        print("Cache stale (article list changed) -- rebuilding...")
 
     print(f"Building embeddings for {len(articles)} articles (model: {model_name})...")
     if model is None:
@@ -132,7 +132,7 @@ def build_or_load_embeddings(
         embeddings=embeddings,
         article_ids=np.array(current_ids),
     )
-    print(f"Saved cache → {cache_file}")
+    print(f"Saved cache -> {cache_file}")
     return embeddings
 
 
@@ -172,13 +172,13 @@ def run(
     embed_model: str = EMBED_MODEL,
 ) -> None:
     print("=" * 60)
-    print("Hybrid BM25 + Embedding: Match QA → KG articles")
+    print("Hybrid BM25 + Embedding: Match QA -> KG articles")
     print("=" * 60)
 
     test_set = json.loads(input_file.read_text(encoding="utf-8"))
     articles = load_articles()
     if not articles:
-        print("ERROR: No articles found in data/raw/ — run scraper first")
+        print("ERROR: No articles found in data/raw/ -- run scraper first")
         return
 
     print("Building BM25 index...")
@@ -193,7 +193,7 @@ def run(
         article_embeddings = build_or_load_embeddings(articles, CACHE_FILE, embed_model, model=embed_model_obj)
         use_embeddings = True
     except ImportError:
-        print("WARNING: sentence-transformers not installed — falling back to BM25-only")
+        print("WARNING: sentence-transformers not installed -- falling back to BM25-only")
 
     matched_count = 0
 
@@ -246,7 +246,7 @@ def run(
         json.dumps(test_set, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    print(f"Saved → {output_file}")
+    print(f"Saved -> {output_file}")
     print("""
 Next: python scripts/clean_matches.py
       (outputs data/qa_testset.json ready for evaluate.py)

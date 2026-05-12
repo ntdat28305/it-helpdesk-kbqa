@@ -100,7 +100,7 @@ def clean(
         json.dumps(data, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    print(f"\nSaved → {output_file}")
+    print(f"\nSaved -> {output_file}")
 
 
 if __name__ == "__main__":
