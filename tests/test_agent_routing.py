@@ -7,7 +7,7 @@ sys.modules.setdefault("src.agent.neo4j_query", MagicMock())
 sys.modules.setdefault("src.agent.prompts", MagicMock())
 sys.modules.setdefault("src.utils.logger", MagicMock())
 # Stub groq and other optional deps
-for _m in ["groq", "rapidfuzz", "rapidfuzz.process", "numpy", "dotenv"]:
+for _m in ["groq", "rapidfuzz", "rapidfuzz.process", "dotenv"]:
     sys.modules.setdefault(_m, MagicMock())
 
 from src.agent.agent import _forced_tool
