@@ -56,3 +56,35 @@ def test_teams_issue_routes_embedding():
 
 def test_setup_question_routes_embedding():
     assert _forced_tool("How to set up MDM enrollment for Windows") == "embedding_search"
+
+
+# ── SYSTEM_PROMPT content checks ──────────────────────────────
+
+def test_system_prompt_blocks_cypher_for_product_names():
+    from src.agent.agent import SYSTEM_PROMPT
+    assert "DO NOT use for product names alone" in SYSTEM_PROMPT
+
+def test_system_prompt_blocks_websearch_as_fallback():
+    from src.agent.agent import SYSTEM_PROMPT
+    assert "DO NOT use as a fallback" in SYSTEM_PROMPT
+
+def test_system_prompt_has_embedding_default_rule():
+    from src.agent.agent import SYSTEM_PROMPT
+    assert "embedding_search" in SYSTEM_PROMPT
+    assert "DEFAULT" in SYSTEM_PROMPT
+
+def test_cypher_tool_description_has_negative_constraint():
+    from src.agent.agent import TOOLS
+    cypher_desc = next(
+        t["function"]["description"] for t in TOOLS
+        if t["function"]["name"] == "cypher_search"
+    )
+    assert "Do NOT use for product names alone" in cypher_desc
+
+def test_websearch_tool_description_has_no_fallback_constraint():
+    from src.agent.agent import TOOLS
+    web_desc = next(
+        t["function"]["description"] for t in TOOLS
+        if t["function"]["name"] == "web_search"
+    )
+    assert "Do NOT use as a fallback" in web_desc
