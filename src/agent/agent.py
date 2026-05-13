@@ -33,8 +33,8 @@ load_dotenv()
 logger = get_logger(__name__, log_file="logs/agent.log")
 
 MAX_STEPS = 4
-EMBEDDING_FUZZY_THRESHOLD = 55  # rapidfuzz score 0–100; lowered to improve match rate for vague queries
-MAX_HISTORY_MESSAGES = 40       # hard cap before oldest messages are dropped
+EMBEDDING_FUZZY_THRESHOLD = 55
+MAX_HISTORY_MESSAGES = 40
 
 # ── Regex patterns for pre-routing ────────────────────────────
 _RE_ERROR_CODE = re.compile(
@@ -43,8 +43,8 @@ _RE_ERROR_CODE = re.compile(
 )
 _RE_WEBSEARCH = re.compile(
     r'\b(latest|newest|recent|update|patch|release|version)\b.*\b(24H2|23H2|2[0-9]{3})\b'
-    r'|\b(24H2|23H2)\b'   # Windows build codes thì ok match thẳng
-    r'|\b(20[2-9][0-9])\b',  # standalone year (2020–2029) → likely version-specific query
+    r'|\b(24H2|23H2)\b'
+    r'|\b(20[2-9][0-9])\b',
     re.IGNORECASE,
 )
 _RE_FOLLOWUP = re.compile(
@@ -52,15 +52,22 @@ _RE_FOLLOWUP = re.compile(
     r'what about|any other|elaborate|more detail|next step|how do i fix|same)\b',
     re.IGNORECASE,
 )
+_RE_BFS = re.compile(
+    r'\b(what causes|why does|how does|relationship between|'
+    r'connection between|when .+ and .+)\b',
+    re.IGNORECASE,
+)
 
 
-def _forced_tool(question: str) -> str | None:
-    """Return Groq tool name to force on step 0, or None to let LLM decide."""
+def _forced_tool(question: str) -> str:
     if _RE_ERROR_CODE.search(question):
         return "cypher_search"
     if _RE_WEBSEARCH.search(question):
         return "web_search"
-    return None
+    if _RE_BFS.search(question):
+        return "bfs_search"
+    return "embedding_search"
+
 
 # ── ReAct system prompt ───────────────────────────────────────
 
@@ -192,6 +199,43 @@ _TOOL_NAME_MAP = {
 }
 
 
+# ── Model rotation ────────────────────────────────────────────
+
+_MODEL_FAST   = "llama-3.1-8b-instant"
+_MODEL_STRONG = "meta-llama/llama-4-scout-17b-16e-instruct"  # 500K TPD
+
+_MODEL_FALLBACK_CHAIN = [
+    "meta-llama/llama-4-scout-17b-16e-instruct",  # primary — 500K TPD
+    "llama-3.3-70b-versatile",                     # fallback 1 — 100K TPD
+    "llama-3.1-8b-instant",                        # fallback 2 — 500K TPD
+]
+
+_current_model_idx = 0
+
+
+def get_strong_model() -> str:
+    """Trả về model hiện tại trong fallback chain."""
+    return _MODEL_FALLBACK_CHAIN[_current_model_idx]
+
+
+def rotate_model_on_rate_limit(error_str: str) -> bool:
+    """
+    Nếu error là rate limit (429), rotate sang model tiếp theo.
+    Returns True nếu đã rotate thành công, False nếu hết fallback.
+    """
+    global _current_model_idx
+    err = str(error_str).lower()
+    if "429" not in err and "rate_limit" not in err and "rate limit" not in err:
+        return False
+    if _current_model_idx < len(_MODEL_FALLBACK_CHAIN) - 1:
+        _current_model_idx += 1
+        new_model = _MODEL_FALLBACK_CHAIN[_current_model_idx]
+        logger.warning(f"Rate limit hit — rotating to model: {new_model}")
+        return True
+    logger.error("All models in fallback chain exhausted — cannot rotate further")
+    return False
+
+
 # ── Load resources ────────────────────────────────────────────
 
 def load_resources() -> dict:
@@ -235,11 +279,7 @@ def load_resources() -> dict:
     return resources
 
 
-# ── Groq plain LLM call (used for pre-processing checks) ─────
-
-_MODEL_FAST = "llama-3.1-8b-instant"
-_MODEL_STRONG = "llama-3.3-70b-versatile"
-
+# ── Groq plain LLM call ───────────────────────────────────────
 
 def llm_call(
     client: Groq,
@@ -248,6 +288,7 @@ def llm_call(
     history: list[dict] | None = None,
     model: str = _MODEL_FAST,
 ) -> str:
+    """Plain LLM call với auto-fallback khi rate limit bị hit."""
     try:
         messages = history.copy() if history else []
         messages.append({"role": "user", "content": prompt})
@@ -260,6 +301,18 @@ def llm_call(
         return resp.choices[0].message.content.strip()
     except Exception as e:
         logger.error(f"LLM error: {e}")
+        # Nếu model strong bị rate limit → fallback sang model tiếp theo
+        if model != _MODEL_FAST and rotate_model_on_rate_limit(str(e)):
+            try:
+                resp = client.chat.completions.create(
+                    model=get_strong_model(),
+                    messages=messages,
+                    temperature=0,
+                    max_tokens=max_tokens,
+                )
+                return resp.choices[0].message.content.strip()
+            except Exception as e2:
+                logger.error(f"Fallback LLM also failed: {e2}")
         return None
 
 
@@ -383,11 +436,10 @@ class ITHelpdeskAgent:
                     tools_used=tool_used,
                 ),
                 max_tokens=80,
-                model=_MODEL_STRONG,
+                model=get_strong_model(),
             )
             if not raw:
                 return _default
-            # Strip markdown fences if present
             raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
             parsed = json.loads(raw)
             return {
@@ -485,30 +537,31 @@ class ITHelpdeskAgent:
             {"role": "user", "content": question},
         ]
 
-        tool_used       = "EMBEDDING"   # default if LLM responds without calling any tool
-        tool_first_used = ""            # tracks the first tool chosen (routing decision)
+        tool_used       = "EMBEDDING"
+        tool_first_used = ""
         entity          = ""
         sources: list[str]      = []
         observations: list[str] = []
         steps:   list[dict]     = []
         answer_text  = ""
-        global_step  = 0  # increments per tool call or thought step
+        global_step  = 0
 
         used_tool_inputs: set[tuple] = set()
-
         first_tool = _forced_tool(question)
 
         for step in range(MAX_STEPS):
             logger.info(f"ReAct step {step + 1}/{MAX_STEPS}")
-            # Force the first tool call when regex gives high-confidence routing
             tool_choice = (
                 {"type": "function", "function": {"name": first_tool}}
                 if step == 0 and first_tool
                 else "auto"
             )
+
+            # ── LLM call với auto-retry khi rate limit ────────
+            resp = None
             try:
                 resp = self.client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
+                    model=get_strong_model(),
                     messages=messages,
                     tools=TOOLS,
                     tool_choice=tool_choice,
@@ -518,6 +571,26 @@ class ITHelpdeskAgent:
                 )
             except Exception as e:
                 logger.error(f"LLM call failed at step {step + 1}: {e}")
+                if rotate_model_on_rate_limit(str(e)):
+                    # Retry 1 lần với model mới sau khi rotate
+                    try:
+                        resp = self.client.chat.completions.create(
+                            model=get_strong_model(),
+                            messages=messages,
+                            tools=TOOLS,
+                            tool_choice=tool_choice,
+                            parallel_tool_calls=False,
+                            temperature=0,
+                            max_tokens=768,
+                        )
+                        logger.info(f"Retry succeeded with model: {get_strong_model()}")
+                    except Exception as e2:
+                        logger.error(f"Retry also failed: {e2}")
+                        break
+                else:
+                    break
+
+            if resp is None:
                 break
 
             msg = resp.choices[0].message
@@ -535,7 +608,6 @@ class ITHelpdeskAgent:
                 logger.info(f"Final answer at step {step + 1}")
                 break
 
-            # Only execute the first tool call per LLM turn to avoid parallel-call sprawl
             first_tc = msg.tool_calls[0]
             messages.append({
                 "role":    "assistant",
@@ -614,7 +686,7 @@ class ITHelpdeskAgent:
                     "content":      obs_content,
                 })
 
-        # Synthesize if loop exhausted without a direct answer
+        # Synthesize nếu loop kết thúc mà chưa có answer
         if not answer_text:
             if observations:
                 synthesis = "\n\n---\n\n".join(observations)
@@ -623,7 +695,7 @@ class ITHelpdeskAgent:
                     f"Based on the findings below, give a concise actionable answer.\n\n"
                     f"Question: {question}\n\nFindings:\n{synthesis}",
                     max_tokens=512,
-                    model=_MODEL_STRONG,
+                    model=get_strong_model(),
                 ) or ""
             if not answer_text:
                 answer_text = (
@@ -631,7 +703,7 @@ class ITHelpdeskAgent:
                     "Please try rephrasing or contact IT support."
                 )
 
-        # Community context for the context field
+        # Community context
         community_summary = ""
         if "communities" in self.resources and entity:
             community_summary = get_community_context(
@@ -668,10 +740,6 @@ class ITHelpdeskAgent:
     def answer(self, question: str) -> dict:
         logger.info(f"Question: {question}")
 
-        # Guard: ambiguous follow-up with no prior context → ask for clarification
-        # Regex is a fast pre-filter; LLM confirms before we reject, because
-        # \bit\b also matches "it" when the question already names a clear subject
-        # (e.g. "my wifi is error, how to fix it?" — NOT ambiguous).
         if not self.history and _RE_FOLLOWUP.search(question):
             _amb_check = llm_call(
                 self.client,
@@ -702,9 +770,7 @@ class ITHelpdeskAgent:
                 "reflection_reason": "Ambiguous question with no prior context.",
             }
 
-        # Topic-change + ambiguity pre-processing
         if self.history:
-            # Fast regex pre-check: obvious follow-up → skip LLM call
             if _RE_FOLLOWUP.search(question):
                 ambiguous = True
             else:
@@ -742,7 +808,7 @@ class ITHelpdeskAgent:
                 f"Note: A previous answer was flagged as insufficient because: {hint}\n"
                 f"Make sure to address this specifically.",
                 max_tokens=512,
-                model=_MODEL_STRONG,
+                model=get_strong_model(),
             )
             if new_answer:
                 result["answer"] = new_answer
