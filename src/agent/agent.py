@@ -60,12 +60,13 @@ _RE_BFS = re.compile(
 
 
 def _forced_tool(question: str) -> str:
+    """Return tool name to force at ReAct step 0; defaults to embedding_search."""
     if _RE_ERROR_CODE.search(question):
         return "cypher_search"
-    if _RE_WEBSEARCH.search(question):
-        return "web_search"
     if _RE_BFS.search(question):
         return "bfs_search"
+    if _RE_WEBSEARCH.search(question):
+        return "web_search"
     return "embedding_search"
 
 
