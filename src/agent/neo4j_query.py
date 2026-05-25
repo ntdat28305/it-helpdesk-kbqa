@@ -150,14 +150,31 @@ def _build_community_index(communities: dict) -> dict[str, str]:
     return index
 
 
-def get_community_context(entity_name: str, communities: dict) -> str:
-    """
-    Tìm community summary liên quan đến entity.
-    Dùng index cache để tránh O(n*m) scan mỗi query.
-    """
+def get_community_context(
+    entity_name: str,
+    communities: dict,
+    community_embs=None,
+    community_ids: list | None = None,
+    retriever=None,
+) -> str:
+    """Find community summary for entity via embedding similarity (preferred)
+    or substring matching (fallback when embeddings not available)."""
+    if not entity_name or not communities:
+        return ""
+
+    # ── Embedding path (preferred) ────────────────────────────
+    if community_embs is not None and community_ids is not None and retriever is not None:
+        import numpy as np
+        query_vec = retriever.encode(entity_name, normalize_embeddings=True)
+        scores = community_embs @ query_vec
+        best_idx = int(np.argmax(scores))
+        if scores[best_idx] < 0.25:
+            return ""
+        return communities[community_ids[best_idx]].get("summary", "")
+
+    # ── Substring fallback ────────────────────────────────────
     global _community_index, _community_summaries
 
-    # Rebuild index only when communities dict changes (first call or after reload)
     if _community_index is None or communities is not _community_summaries:
         _community_index    = _build_community_index(communities)
         _community_summaries = communities
@@ -168,7 +185,6 @@ def get_community_context(entity_name: str, communities: dict) -> str:
 
     for node_lower, comm_id in _community_index.items():
         if entity_lower in node_lower or node_lower in entity_lower:
-            # Count all matches for this community
             info  = communities[comm_id]
             count = sum(
                 1 for n in info.get("nodes", [])

@@ -320,6 +320,17 @@ def load_resources() -> dict:
             "retriever will be unused. Run train_gcn.py to generate semantic embeddings."
         )
 
+    # Pre-compute community summary embeddings
+    encoder = resources.get("retriever") or resources.get("base_encoder")
+    if "communities" in resources and encoder is not None:
+        comm_ids  = list(resources["communities"].keys())
+        summaries = [resources["communities"][cid].get("summary", "") for cid in comm_ids]
+        resources["community_ids"]  = comm_ids
+        resources["community_embs"] = encoder.encode(
+            summaries, normalize_embeddings=True, show_progress_bar=False
+        )
+        logger.info(f"Pre-computed embeddings for {len(comm_ids)} communities")
+
     return resources
 
 
@@ -763,7 +774,11 @@ class ITHelpdeskAgent:
         community_summary = ""
         if "communities" in self.resources and entity:
             community_summary = get_community_context(
-                entity, self.resources["communities"]
+                entity,
+                self.resources["communities"],
+                community_embs=self.resources.get("community_embs"),
+                community_ids=self.resources.get("community_ids"),
+                retriever=self.resources.get("retriever") or self.resources.get("base_encoder"),
             )
 
         _EMPTY_MARKERS = (

@@ -108,3 +108,100 @@ def test_load_resources_loads_sem_emb_independently_of_retriever():
     # SentenceTransformer called with base model
     calls_str = str(_st_mock.SentenceTransformer.call_args_list)
     assert "all-MiniLM-L6-v2" in calls_str
+
+# ─────────────────────────────────────────────────────────────
+# S1.2 — Community embedding lookup
+# ─────────────────────────────────────────────────────────────
+
+import importlib
+import contextlib
+
+@contextlib.contextmanager
+def _real_neo4j_query():
+    """Temporarily replace the neo4j_query stub with the real module."""
+    stub = sys.modules.get("src.agent.neo4j_query")
+    # Remove stub so importlib loads the real module
+    sys.modules.pop("src.agent.neo4j_query", None)
+    real_mod = importlib.import_module("src.agent.neo4j_query")
+    try:
+        yield real_mod
+    finally:
+        # Restore original stub so S1.1 tests remain isolated
+        if stub is not None:
+            sys.modules["src.agent.neo4j_query"] = stub
+        else:
+            sys.modules.pop("src.agent.neo4j_query", None)
+
+
+def test_get_community_context_embedding_path():
+    """get_community_context should use cosine sim when embeddings provided."""
+    import numpy as np
+
+    with _real_neo4j_query() as nq:
+        get_community_context = nq.get_community_context
+
+        communities = {
+            "0": {"summary": "Azure AD authentication and sign-in issues", "nodes": ["Azure AD"]},
+            "1": {"summary": "Intune device enrollment and management",     "nodes": ["Intune"]},
+            "2": {"summary": "Teams meeting and audio problems",            "nodes": ["Teams"]},
+        }
+
+        comm_embs = np.array([
+            [0.1, 0.9, 0.1],  # community 0 — Azure AD
+            [0.9, 0.1, 0.1],  # community 1 — Intune (should win)
+            [0.1, 0.1, 0.9],  # community 2 — Teams
+        ], dtype=np.float32)
+        community_ids = ["0", "1", "2"]
+
+        retriever_mock = MagicMock()
+        retriever_mock.encode.return_value = np.array([0.9, 0.1, 0.1])  # "Intune" → matches community 1
+
+        result = get_community_context(
+            "Intune",
+            communities,
+            community_embs=comm_embs,
+            community_ids=community_ids,
+            retriever=retriever_mock,
+        )
+        assert "Intune" in result or "device" in result.lower() or "enrollment" in result.lower(), \
+            f"Expected Intune community summary, got: {result!r}"
+
+
+def test_get_community_context_fallback_when_no_embeddings():
+    """get_community_context should fall back to substring when embeddings absent."""
+    with _real_neo4j_query() as nq:
+        get_community_context = nq.get_community_context
+
+        communities = {
+            "0": {"summary": "Azure AD authentication issues", "nodes": ["Azure AD", "Sign-in"]},
+        }
+        result = get_community_context("Azure AD", communities)
+        assert "Azure AD" in result or "authentication" in result.lower(), \
+            f"Fallback expected Azure AD match, got: {result!r}"
+
+
+def test_get_community_context_returns_empty_below_threshold():
+    """get_community_context should return empty string when best sim score < 0.25."""
+    import numpy as np
+
+    with _real_neo4j_query() as nq:
+        get_community_context = nq.get_community_context
+
+        communities = {
+            "0": {"summary": "Azure AD authentication", "nodes": ["Azure AD"]},
+        }
+        comm_embs = np.array([[0.1, 0.9, 0.1]], dtype=np.float32)
+        community_ids = ["0"]
+
+        retriever_mock = MagicMock()
+        # Low similarity vector — should score below 0.25 threshold
+        retriever_mock.encode.return_value = np.array([0.0, 0.0, 0.1])
+
+        result = get_community_context(
+            "random unrelated query",
+            communities,
+            community_embs=comm_embs,
+            community_ids=community_ids,
+            retriever=retriever_mock,
+        )
+        assert result == "", f"Expected empty string for low-score match, got: {result!r}"
