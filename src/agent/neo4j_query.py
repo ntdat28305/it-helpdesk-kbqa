@@ -14,6 +14,8 @@ load_dotenv()
 
 _driver = None
 
+COMMUNITY_SIMILARITY_THRESHOLD = 0.25
+
 
 def get_driver():
     global _driver
@@ -168,9 +170,9 @@ def get_community_context(
         query_vec = retriever.encode(entity_name, normalize_embeddings=True)
         scores = community_embs @ query_vec
         best_idx = int(np.argmax(scores))
-        if scores[best_idx] < 0.25:
-            return ""
-        return communities[community_ids[best_idx]].get("summary", "")
+        if scores[best_idx] >= COMMUNITY_SIMILARITY_THRESHOLD:
+            return communities[community_ids[best_idx]].get("summary", "")
+        # Score too low — fall through to substring matching
 
     # ── Substring fallback ────────────────────────────────────
     global _community_index, _community_summaries

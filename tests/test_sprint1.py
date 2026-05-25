@@ -181,7 +181,8 @@ def test_get_community_context_fallback_when_no_embeddings():
 
 
 def test_get_community_context_returns_empty_below_threshold():
-    """get_community_context should return empty string when best sim score < 0.25."""
+    """get_community_context falls back to substring when embedding score < threshold;
+    returns empty string when substring also finds no match."""
     import numpy as np
 
     with _real_neo4j_query() as nq:
