@@ -20,7 +20,7 @@ RAW_DIR     = Path("data/raw")
 OUTPUT_FILE = Path("data/qa_testset_matched.json")
 CACHE_FILE  = Path("data/.cache/article_embeddings.npz")
 EMBED_MODEL = "all-MiniLM-L6-v2"
-DEFAULT_ALPHA = 0.6
+DEFAULT_ALPHA = 0.35
 DEFAULT_TOP_K = 3
 
 
