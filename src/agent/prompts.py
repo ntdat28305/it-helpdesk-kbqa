@@ -139,3 +139,25 @@ Confidence criteria:
 - "low": no sources, vague answer, or answer does not address the question
 
 is_sufficient: false only when the answer is completely off-topic or empty."""
+
+
+# ── Merged preprocessing (ambiguity + topic-change) ───────────
+
+PREPROCESS_PROMPT = """Analyze this IT helpdesk conversation turn.
+
+Previous question: {prev}
+Current question: {current}
+
+Answer TWO questions:
+1. is_ambiguous: Does the current question require prior context to be understood?
+   - true ONLY if it has no discernible subject (e.g. bare "how do I fix it?", "what about it?")
+   - false if it names any device, error, product, or symptom
+
+2. topic_changed: Is the current question about a completely different IT topic?
+   - true ONLY if topics are fully unrelated (e.g. "smart card" → "printing issue")
+   - false for follow-up questions, elaborations, or loosely related topics
+
+Reply ONLY with valid JSON, no markdown:
+{{"is_ambiguous": false, "topic_changed": false}}
+
+Rule: If {prev} is empty, always return: {{"is_ambiguous": false, "topic_changed": false}}"""

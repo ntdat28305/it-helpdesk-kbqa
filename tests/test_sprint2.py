@@ -79,3 +79,17 @@ def test_global_search_returns_no_data_message_when_no_embs():
     from src.agent.agent import global_search
     result = global_search("overview", {})
     assert "No community data" in result or "not" in result.lower()
+
+# ── S2.2 merged preprocess ────────────────────────────────────
+
+def test_preprocess_prompt_has_both_fields():
+    import importlib, sys
+    sys.modules.pop("src.agent.prompts", None)
+    import src.agent.prompts as p
+    assert "is_ambiguous" in p.PREPROCESS_PROMPT
+    assert "topic_changed" in p.PREPROCESS_PROMPT
+
+def test_preprocess_prompt_has_prev_current_placeholders():
+    import src.agent.prompts as p
+    assert "{prev}" in p.PREPROCESS_PROMPT
+    assert "{current}" in p.PREPROCESS_PROMPT

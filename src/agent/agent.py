@@ -22,8 +22,7 @@ from rapidfuzz import process as fuzz_process
 
 from src.agent.neo4j_query import cypher_search, bfs_search, get_community_context
 from src.agent.prompts import (
-    IS_AMBIGUOUS_PROMPT,
-    TOPIC_CHANGE_PROMPT,
+    PREPROCESS_PROMPT,
     PLAN_PROMPT,
     REFLECT_PROMPT,
 )
@@ -45,11 +44,6 @@ _RE_WEBSEARCH = re.compile(
     r'\b(latest|newest|recent|update|patch|release|version)\b.*\b(24H2|23H2|2[0-9]{3})\b'
     r'|\b(24H2|23H2)\b'
     r'|\b(20[2-9][0-9])\b',
-    re.IGNORECASE,
-)
-_RE_FOLLOWUP = re.compile(
-    r'\b(it|this|that|they|them|the (issue|problem|error|fix|solution)|'
-    r'what about|any other|elaborate|more detail|next step|how do i fix|same)\b',
     re.IGNORECASE,
 )
 _RE_BFS = re.compile(
@@ -512,18 +506,30 @@ class ITHelpdeskAgent:
         self.history = []
         logger.info("Conversation history reset")
 
-    def _detect_topic_change(self, question: str) -> bool:
-        if len(self.history) < 2:
-            return False
-        prev_question = self.history[-2]["content"]
-        result = llm_call(
+    def _preprocess(self, question: str) -> tuple[bool, bool]:
+        """Single LLM call: detect ambiguity AND topic change simultaneously."""
+        if not self.history:
+            return False, False
+
+        prev = self.history[-2]["content"] if len(self.history) >= 2 else ""
+        if not prev:
+            return False, False
+
+        raw = llm_call(
             self.client,
-            TOPIC_CHANGE_PROMPT.format(prev=prev_question, current=question),
-            max_tokens=5,
+            PREPROCESS_PROMPT.format(prev=prev, current=question),
+            max_tokens=20,
         )
-        changed = bool(result) and result.lower().strip().startswith("yes")
-        logger.info(f"Topic change: '{prev_question[:40]}' → '{question[:40]}' = {changed}")
-        return changed
+        try:
+            raw = (raw or "").strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            parsed    = json.loads(raw)
+            is_amb    = bool(parsed.get("is_ambiguous", False))
+            topic_chg = bool(parsed.get("topic_changed", False))
+            logger.info(f"Preprocess: ambiguous={is_amb}, topic_changed={topic_chg}")
+            return is_amb, topic_chg
+        except Exception as e:
+            logger.warning(f"Preprocess parse error: {e}")
+            return False, False
 
     def _plan(self, question: str) -> str:
         """Generate a lightweight planning note before the ReAct loop."""
@@ -873,17 +879,9 @@ class ITHelpdeskAgent:
     def answer(self, question: str) -> dict:
         logger.info(f"Question: {question}")
 
-        if not self.history and _RE_FOLLOWUP.search(question):
-            _amb_check = llm_call(
-                self.client,
-                IS_AMBIGUOUS_PROMPT.format(question=question),
-                max_tokens=5,
-            )
-            _truly_ambiguous = bool(_amb_check) and _amb_check.lower().strip().startswith("yes")
-        else:
-            _truly_ambiguous = False
+        is_ambiguous, topic_changed = self._preprocess(question)
 
-        if _truly_ambiguous:
+        if is_ambiguous and not self.history:
             clarification = (
                 "Could you provide more details? "
                 "For example, what device, error code, or issue are you experiencing?"
@@ -903,20 +901,9 @@ class ITHelpdeskAgent:
                 "reflection_reason": "Ambiguous question with no prior context.",
             }
 
-        if self.history:
-            if _RE_FOLLOWUP.search(question):
-                ambiguous = True
-            else:
-                _amb = llm_call(
-                    self.client,
-                    IS_AMBIGUOUS_PROMPT.format(question=question),
-                    max_tokens=5,
-                )
-                ambiguous = bool(_amb) and _amb.lower().strip().startswith("yes")
-
-            if not ambiguous and self._detect_topic_change(question):
-                logger.info("Topic changed → auto reset history")
-                self.reset_history()
+        if self.history and topic_changed and not is_ambiguous:
+            logger.info("Topic changed → auto reset history")
+            self.reset_history()
 
         history_context = self.history[-10:] if self.history else []
         plan_note = self._plan(question)
