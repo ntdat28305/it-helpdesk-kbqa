@@ -344,7 +344,7 @@ User Question
 
 ### Test Set
 
-The evaluation uses **100 real user questions** scraped from Microsoft Q&A (`data/qa_testset.json`), stratified across 4 IT categories (DeviceMgmt=30, Identity=25, Network=20, Teams=25).
+The evaluation uses **97 real user questions** scraped from Microsoft Q&A (`data/qa_testset.json`), stratified across 4 IT categories (Identity=35, Teams=24, DeviceMgmt=20, Network=18).
 
 **Regenerate the test set:**
 ```bash
@@ -364,7 +364,7 @@ PYTHONUTF8=1 python scripts/evaluate.py --test-set data/qa_testset.json
 
 Metrics: **Hit@1**, **Hit@5**, **MRR**, **ROUGE-L**, **Keyword Accuracy**, **LLM-Judge** (Groq `GROQ_KEY_2`), **Tool Accuracy**, **Latency p50/p95**. Compared against a BM25 baseline.
 
-### Results (n = 100, Microsoft Q&A)
+### Results (n = 97, Microsoft Q&A)
 
 <table>
 <tr>
@@ -372,38 +372,46 @@ Metrics: **Hit@1**, **Hit@5**, **MRR**, **ROUGE-L**, **Keyword Accuracy**, **LLM
   <th align="center">BM25 Baseline</th>
   <th align="center">ReAct Agent</th>
 </tr>
-<tr><td><b>Hit@1</b></td><td align="center">0.263</td><td align="center">0.030</td></tr>
-<tr><td><b>Hit@5</b></td><td align="center">0.626</td><td align="center">0.051</td></tr>
-<tr><td><b>MRR</b></td><td align="center">0.395</td><td align="center">0.046</td></tr>
-<tr><td><b>ROUGE-L</b></td><td align="center">—</td><td align="center">0.116</td></tr>
-<tr><td><b>Keyword Accuracy</b></td><td align="center">—</td><td align="center">0.267</td></tr>
-<tr><td><b>LLM-Judge</b></td><td align="center">—</td><td align="center">3.19 / 5.0</td></tr>
-<tr><td><b>Tool Accuracy</b></td><td align="center">—</td><td align="center"><b>89%</b></td></tr>
-<tr><td><b>Latency p50</b></td><td align="center">—</td><td align="center">42.7s</td></tr>
+<tr><td><b>Hit@1</b></td><td align="center">0.247</td><td align="center">0.031</td></tr>
+<tr><td><b>Hit@5</b></td><td align="center">0.536</td><td align="center">0.062</td></tr>
+<tr><td><b>MRR</b></td><td align="center">0.348</td><td align="center">0.052</td></tr>
+<tr><td><b>ROUGE-L</b></td><td align="center">—</td><td align="center">0.148</td></tr>
+<tr><td><b>Keyword Accuracy</b></td><td align="center">—</td><td align="center">0.361</td></tr>
+<tr><td><b>LLM-Judge</b></td><td align="center">—</td><td align="center">3.17 / 5.0</td></tr>
+<tr><td><b>Answer Relevancy</b></td><td align="center">—</td><td align="center">0.757</td></tr>
+<tr><td><b>Pairwise Win Rate</b></td><td align="center">—</td><td align="center"><b>100%</b> (95/95 vs BM25)</td></tr>
+<tr><td><b>Tool Accuracy</b></td><td align="center">—</td><td align="center"><b>74.2%</b></td></tr>
+<tr><td><b>Latency p50</b></td><td align="center">—</td><td align="center">34.1s</td></tr>
+<tr><td><b>Latency p95</b></td><td align="center">—</td><td align="center">50.9s</td></tr>
+<tr><td><b>Avg Steps</b></td><td align="center">—</td><td align="center">3.1</td></tr>
 </table>
 
-> **Note on Hit@K:** The Q&A test set uses `matched_article_id` assigned by hybrid similarity matching (not human annotation), so Hit@K reflects KG coverage rather than answer correctness. LLM-Judge and ROUGE-L are the more meaningful quality metrics for this dataset.
+> **Note on Hit@K:** The Q&A test set uses `matched_article_id` assigned by hybrid similarity matching (not human annotation), so Hit@K reflects KG coverage rather than answer correctness. LLM-Judge, Answer Relevancy, and Pairwise Win Rate are the more meaningful quality metrics for this dataset.
 
 ### Tool Accuracy Detail
 
-Tool accuracy improved from **60% → 89%** after rewriting `SYSTEM_PROMPT` with explicit `DO NOT` constraints and extending `_forced_tool()` with BFS detection and embedding as hard default.
+Tool accuracy improved from **60% → 74.2%** after rewriting `SYSTEM_PROMPT` with explicit `DO NOT` constraints and extending `_forced_tool()` with BFS detection and embedding as hard default.
 
-| Routing | Count | Status |
+| Routing (expected → actual) | Count | Status |
 |---|---|---|
-| EMBEDDING → EMBEDDING | 88 | ✓ correct |
-| CYPHER → CYPHER | 1 | ✓ correct |
-| EMBEDDING → CYPHER | 3 | ✗ (was 22) |
-| EMBEDDING → WEBSEARCH | 1 | ✗ (was 9) |
-| API timeout / error | 3 | ✗ |
+| EMBEDDING → EMBEDDING | 59 | ✓ correct |
+| CYPHER → CYPHER | 13 | ✓ correct |
+| CYPHER → EMBEDDING | 16 | ✗ misrouted |
+| WEBSEARCH → EMBEDDING | 5 | ✗ misrouted |
+| BFS → EMBEDDING | 2 | ✗ misrouted |
+| CYPHER → WEBSEARCH | 1 | ✗ misrouted |
+| EMBEDDING → WEBSEARCH | 1 | ✗ misrouted |
+
+The largest misroute bucket is CYPHER→EMBEDDING (16 cases): questions about specific error codes that the agent routed to embedding search instead of Cypher exact-match.
 
 ### Per-Category Performance
 
 | Category | N | Hit@1 | MRR | ROUGE-L | LLM-Judge |
 |---|---|---|---|---|---|
-| DeviceMgmt | 30 | 0.033 | 0.058 | 0.136 | 3.60 |
-| Identity | 25 | 0.042 | 0.062 | 0.138 | 3.25 |
-| Teams | 25 | 0.000 | 0.014 | 0.116 | 3.22 |
-| Network | 20 | 0.050 | 0.050 | 0.057 | 2.45 |
+| Identity | 35 | 0.029 | 0.046 | 0.156 | 3.00 |
+| Teams | 24 | 0.042 | 0.046 | 0.147 | 3.63 |
+| Network | 18 | 0.000 | 0.011 | 0.140 | 3.06 |
+| DeviceMgmt | 20 | 0.050 | 0.108 | 0.146 | 3.00 |
 
 ---
 
@@ -524,8 +532,8 @@ it-helpdesk-kbqa/
 │   ├── discovered_urls.json        # 378 article URLs
 │   ├── communities.json            # Leiden community assignments
 │   ├── community_summaries.json    # LLM summaries per community (required at runtime)
-│   ├── qa_testset_raw.json         # 100 raw Microsoft Q&A questions
-│   ├── qa_testset.json             # 100-question evaluation set (with matched_article_id)
+│   ├── qa_testset_raw.json         # raw Microsoft Q&A questions (gitignored, regenerate via scrape_qa.py)
+│   ├── qa_testset.json             # 97-question evaluation set (with matched_article_id)
 │   └── eval_results.json           # Latest evaluation metrics
 │
 ├── models/
@@ -533,7 +541,7 @@ it-helpdesk-kbqa/
 │   │   ├── node_embeddings.npy
 │   │   ├── idx_to_name.json
 │   │   ├── name_to_idx.json
-│   │   └── node_semantic_embeddings.npy   # optional — finetuned retriever
+│   │   └── node_semantic_embeddings.npy   # optional — finetuned retriever (gitignored, 4.8MB)
 │   ├── gcn_checkpoint/             # GAE model weights (best checkpoint)
 │   └── retriever/                  # Finetuned sentence-transformer (optional)
 │
@@ -565,7 +573,7 @@ docker-compose up --build
 
 - The `ui` service waits for `api` to pass its health check before starting (`depends_on: condition: service_healthy`)
 - Neo4j AuraDB is managed cloud — no local database container needed
-- `models/` is **not gitignored** by design so trained embeddings ship with the image
+- `models/embeddings/node_embeddings.npy`, `idx_to_name.json`, `name_to_idx.json` ship with the repo; large optional files (`model.safetensors`, `node_semantic_embeddings.npy`) are gitignored and must be regenerated locally if needed
 
 ---
 
