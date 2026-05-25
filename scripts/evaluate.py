@@ -3,19 +3,28 @@ scripts/evaluate.py
 Đánh giá Agent vs BM25 baseline trên test set.
 
 Metrics:
-  - Hit@1, Hit@5, MRR  — retrieval (có tìm đúng article không)
-  - ROUGE-L             — answer quality (so sánh với reference answer)
-  - LLM-as-Judge        — answer correctness via Groq (llama-3.1-8b-instant, KEY_2)
-  - BERT-Score F1       — semantic similarity (roberta-large)
-  - Tool Accuracy       — tỷ lệ agent chọn đúng tool (requires expected_tool in test_set)
-  - Latency p50/p95     — performance monitoring
-  - Avg/Max Steps       — agent behavior analysis
+  - Hit@1, Hit@5, MRR     — retrieval (chỉ tính cho câu có matched_article_id)
+  - ROUGE-L               — answer quality (so sánh với reference answer)
+  - Keyword Accuracy      — % keywords quan trọng xuất hiện trong answer
+  - LLM-as-Judge          — answer correctness via Groq (llama-3.3-70b-versatile)
+  - BERT-Score F1         — semantic similarity (roberta-large)
+  - Tool Accuracy         — tỷ lệ agent chọn đúng tool
+  - Latency p50/p95       — performance monitoring
+  - Avg/Max Steps         — agent behavior analysis
+
+Hỗ trợ 2 loại test set:
+  - test_set.json cũ: article_id map về KG → tính đủ tất cả metrics
+  - qa_testset.json mới (từ Microsoft Q&A): article_id = "qa_{id}"
+    → bỏ qua Hit@K/MRR nếu matched_article_id rỗng
+    → vẫn tính ROUGE-L, Keyword Accuracy, LLM-Judge đầy đủ
 
 Chạy:
     python scripts/evaluate.py
+    python scripts/evaluate.py --test-set data/qa_testset.json
 """
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import re
@@ -30,6 +39,8 @@ from rouge_score import rouge_scorer
 
 load_dotenv()
 
+JUDGE_MODEL   = "llama-3.3-70b-versatile"
+
 TEST_SET_FILE = Path("data/test_set.json")
 RAW_DIR       = Path("data/raw")
 API_URL       = os.environ.get("API_URL", "http://localhost:8000")
@@ -39,8 +50,8 @@ _rouge = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=False)
 
 # ── Load data ─────────────────────────────────────────────────
 
-def load_test_set() -> list[dict]:
-    return json.loads(TEST_SET_FILE.read_text(encoding="utf-8"))
+def load_test_set(path: Path) -> list[dict]:
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def load_all_articles() -> list[dict]:
@@ -88,7 +99,7 @@ def agent_search(
     url_to_id: dict,
     session_id: str,
 ) -> dict:
-    """Query the agent API. Returns dict: article_ids, tool_used, answer, latency, steps_count."""
+    """Query the agent API."""
     start = time.time()
     try:
         resp = requests.post(
@@ -144,6 +155,34 @@ def rouge_l(hypothesis: str, reference: str) -> float:
     return _rouge.score(hypothesis, reference)["rougeL"].fmeasure
 
 
+def keyword_accuracy(answer: str, keywords: list[str]) -> float:
+    """
+    Tỷ lệ keywords quan trọng xuất hiện trong answer.
+    Phù hợp cho IT helpdesk vì answer phải chứa đúng error codes,
+    product names, technical terms.
+    """
+    if not keywords or not answer:
+        return 0.0
+    answer_lower = answer.lower()
+    hits = sum(1 for kw in keywords if kw.lower() in answer_lower)
+    return hits / len(keywords)
+
+
+def get_article_id(qa: dict) -> tuple[str, bool]:
+    """
+    Lấy article_id để dùng cho retrieval evaluation.
+    Returns: (article_id, can_eval_retrieval)
+    - can_eval_retrieval = False nếu câu từ Q&A chưa được map về KG
+    """
+    matched = qa.get("matched_article_id", "")
+    if matched:
+        return matched, True
+    article_id = qa["article_id"]
+    # article_id = "qa_{num}" → chưa map về KG → không tính retrieval
+    can_eval = not article_id.startswith("qa_")
+    return article_id, can_eval
+
+
 JUDGE_PROMPT = """\
 You are an IT support expert evaluating answer quality.
 
@@ -160,13 +199,10 @@ Rate the agent's answer on a scale of 1-5:
 
 Output ONLY the number (1-5):"""
 
-
-# Lazy singleton Groq client for judge (uses KEY_2 to avoid competing with agent on KEY_1)
 _groq_client: object = None
 
 
 def _get_groq_client():
-    """Get or create cached Groq client."""
     global _groq_client
     if _groq_client is None:
         from groq import Groq
@@ -176,13 +212,13 @@ def _get_groq_client():
 
 
 def llm_judge(question: str, reference: str, agent_answer: str) -> int | None:
-    """Score agent answer 1-5 using Groq. Returns None on empty input or API failure."""
+    """Score agent answer 1-5 using Groq."""
     if not agent_answer or not reference:
         return None
     try:
         client = _get_groq_client()
         resp = client.chat.completions.create(
-            model="llama-3.1-8b-instant",  # separate rate limit pool from agent's 70b model
+            model=JUDGE_MODEL,
             messages=[{"role": "user", "content": JUDGE_PROMPT.format(
                 question=question,
                 reference=reference,
@@ -199,8 +235,6 @@ def llm_judge(question: str, reference: str, agent_answer: str) -> int | None:
 
 
 def compute_bert_score(predictions: list[str], references: list[str]) -> float | None:
-    """Compute BERT-Score F1 (roberta-large) over non-empty prediction/reference pairs.
-    Returns None if bert-score is not installed."""
     pairs = [(p, r) for p, r in zip(predictions, references) if p and r]
     if not pairs:
         return None
@@ -208,11 +242,8 @@ def compute_bert_score(predictions: list[str], references: list[str]) -> float |
         from bert_score import score as bert_score_fn
         preds, refs = zip(*pairs)
         _, _, F1 = bert_score_fn(
-            list(preds),
-            list(refs),
-            lang="en",
-            model_type="roberta-large",
-            verbose=False,
+            list(preds), list(refs),
+            lang="en", model_type="roberta-large", verbose=False,
         )
         return F1.mean().item()
     except ImportError:
@@ -221,11 +252,9 @@ def compute_bert_score(predictions: list[str], references: list[str]) -> float |
 
 
 def compute_tool_accuracy(results: list[dict], test_set: list[dict]) -> dict:
-    """Compare tool_used vs expected_tool. Skips entries without expected_tool field."""
     correct   = 0
     total     = 0
     confusion: dict[tuple[str, str], int] = {}
-
     for qa, result in zip(test_set, results):
         expected = qa.get("expected_tool")
         if not expected:
@@ -236,7 +265,6 @@ def compute_tool_accuracy(results: list[dict], test_set: list[dict]) -> dict:
             correct += 1
         key = (expected, actual)
         confusion[key] = confusion.get(key, 0) + 1
-
     return {
         "accuracy":  correct / total if total else 0.0,
         "correct":   correct,
@@ -247,19 +275,28 @@ def compute_tool_accuracy(results: list[dict], test_set: list[dict]) -> dict:
 
 # ── Evaluation pipeline ───────────────────────────────────────
 
-def evaluate():
+def evaluate(test_set_path: Path = TEST_SET_FILE):
     print("Loading test set...")
-    test_set = load_test_set()
+    test_set = load_test_set(test_set_path)
     n        = len(test_set)
-    print(f"Test set: {n} questions")
+    print(f"Test set: {n} questions  [{test_set_path}]")
 
-    # Category distribution
+    # Phân tích test set
     cat_dist: dict[str, int] = defaultdict(int)
+    tool_dist: dict[str, int] = defaultdict(int)
+    n_from_qa    = sum(1 for qa in test_set if qa.get("source") == "microsoft_qa")
+    n_retrieval  = sum(1 for qa in test_set if not get_article_id(qa)[0].startswith("qa_"))
+
     for qa in test_set:
         cat_dist[qa.get("category", "?")] += 1
-    print("Category distribution: " + ", ".join(f"{c}={v}" for c, v in sorted(cat_dist.items())))
+        tool_dist[qa.get("expected_tool", "?")] += 1
 
-    # BM25 setup — optional, skip gracefully if no raw data
+    print(f"Source: {n - n_from_qa} from Microsoft Learn, {n_from_qa} from Microsoft Q&A")
+    print(f"Retrieval-evaluable: {n_retrieval}/{n} (rest skipped for Hit@K/MRR)")
+    print("Category: " + ", ".join(f"{c}={v}" for c, v in sorted(cat_dist.items())))
+    print("Expected tool: " + ", ".join(f"{t}={v}" for t, v in sorted(tool_dist.items())))
+
+    # BM25 setup
     bm25_available = False
     bm25 = bm25_articles = None
     print("\nLoading articles for BM25...")
@@ -274,15 +311,15 @@ def evaluate():
         url_to_id = {}
 
     if not os.getenv("GROQ_API_KEY_1"):
-        print("WARNING: GROQ_API_KEY_1 not set — LLM-Judge will be skipped (all scores = N/A)")
+        print("WARNING: GROQ_API_KEY_1 not set — LLM-Judge will be skipped")
 
-    # Unique run ID để tránh session contamination khi chạy nhiều lần
     run_id = uuid.uuid4().hex[:8]
     print(f"\nRun ID: {run_id}")
 
     # Accumulators
     bm25_h1 = bm25_h5 = bm25_mrr = 0.0
-    ag_h1 = ag_h5 = ag_mrr = ag_rl = 0.0
+    ag_h1 = ag_h5 = ag_mrr = ag_rl = ag_kw = 0.0
+    n_retrieval_done  = 0   # số câu thực sự tính retrieval
     latencies:       list[float] = []
     step_counts:     list[int]   = []
     judge_scores:    list[int]   = []
@@ -291,39 +328,42 @@ def evaluate():
     all_results:     list[dict]  = []
 
     tool_stats: dict[str, dict] = defaultdict(
-        lambda: {"h1": 0.0, "h5": 0.0, "mrr": 0.0, "rl": 0.0, "count": 0,
+        lambda: {"h1": 0.0, "h5": 0.0, "mrr": 0.0, "rl": 0.0, "kw": 0.0,
+                 "count": 0, "retrieval_count": 0,
                  "judge_sum": 0.0, "judge_n": 0}
     )
     cat_stats: dict[str, dict] = defaultdict(
-        lambda: {"h1": 0.0, "mrr": 0.0, "rl": 0.0, "count": 0,
+        lambda: {"h1": 0.0, "mrr": 0.0, "rl": 0.0, "kw": 0.0,
+                 "count": 0, "retrieval_count": 0,
                  "judge_sum": 0.0, "judge_n": 0}
     )
 
     print(f"\nEvaluating {n} questions...\n")
 
     for i, qa in enumerate(test_set, 1):
-        question   = qa["question"]
-        article_id = qa["article_id"]
-        ref_answer = qa.get("answer", "")
-        category   = qa.get("category", "?")
+        question                  = qa["question"]
+        article_id, can_eval_ret  = get_article_id(qa)
+        # Dùng ground_truth_answer nếu có (đã fill thủ công), fallback về answer
+        ref_answer  = qa.get("ground_truth_answer") or qa.get("answer", "")
+        category    = qa.get("category", "?")
+        source      = qa.get("source", "learn")
+        kw_list     = qa.get("answer_keywords", [])
+        src_label   = "QA" if source == "microsoft_qa" else "MS"
 
-        print(f"[{i:02d}/{n}] {question[:65]}...")
+        print(f"[{i:02d}/{n}] [{src_label}] {question[:60]}...")
 
-        # BM25
-        if bm25_available:
+        # BM25 (chỉ tính nếu có thể eval retrieval)
+        if bm25_available and can_eval_ret:
             bm25_results = bm25_search(bm25, bm25_articles, question, top_k=5)
             bm25_h1  += hit_at_k(bm25_results, article_id, 1)
             bm25_h5  += hit_at_k(bm25_results, article_id, 5)
             bm25_mrr += reciprocal_rank(bm25_results, article_id)
 
-        # Agent — session ID gắn run_id để không bị contaminate
+        # Agent
         session_id = f"eval_{run_id}_{i}"
         q_start    = time.time()
         result     = agent_search(question, url_to_id, session_id)
-        # Adaptive sleep: llama-3.3-70b-versatile has 12K TPM on KEY_1.
-        # Each question uses ~3K tokens → max ~4 q/min safe.
-        # Ensure minimum 15s per question cycle regardless of API speed.
-        elapsed = time.time() - q_start
+        elapsed    = time.time() - q_start
         time.sleep(max(0, 15 - elapsed))
 
         ag_results  = result["article_ids"]
@@ -336,15 +376,37 @@ def evaluate():
         all_references.append(ref_answer)
         all_results.append(result)
 
-        h1 = hit_at_k(ag_results, article_id, 1)
-        h5 = hit_at_k(ag_results, article_id, 5)
-        rr = reciprocal_rank(ag_results, article_id)
-        rl = rouge_l(ag_answer, ref_answer)
+        # Retrieval metrics — chỉ tính khi có article_id hợp lệ
+        if can_eval_ret:
+            h1 = hit_at_k(ag_results, article_id, 1)
+            h5 = hit_at_k(ag_results, article_id, 5)
+            rr = reciprocal_rank(ag_results, article_id)
+            ag_h1  += h1
+            ag_h5  += h5
+            ag_mrr += rr
+            n_retrieval_done += 1
+            tool_stats[tool_used]["h1"]              += h1
+            tool_stats[tool_used]["h5"]              += h5
+            tool_stats[tool_used]["mrr"]             += rr
+            tool_stats[tool_used]["retrieval_count"] += 1
+            cat_stats[category]["h1"]                += h1
+            cat_stats[category]["mrr"]               += rr
+            cat_stats[category]["retrieval_count"]   += 1
+        else:
+            h1 = h5 = rr = None
 
-        ag_h1  += h1
-        ag_h5  += h5
-        ag_mrr += rr
-        ag_rl  += rl
+        # Answer quality metrics — tính cho tất cả
+        rl       = rouge_l(ag_answer, ref_answer)
+        kw_score = keyword_accuracy(ag_answer, kw_list)
+        ag_rl   += rl
+        ag_kw   += kw_score
+
+        tool_stats[tool_used]["rl"]    += rl
+        tool_stats[tool_used]["kw"]    += kw_score
+        tool_stats[tool_used]["count"] += 1
+        cat_stats[category]["rl"]      += rl
+        cat_stats[category]["kw"]      += kw_score
+        cat_stats[category]["count"]   += 1
 
         # LLM-as-Judge
         judge_score = llm_judge(question, ref_answer, ag_answer)
@@ -355,67 +417,70 @@ def evaluate():
             cat_stats[category]["judge_sum"]   += judge_score
             cat_stats[category]["judge_n"]     += 1
 
-        tool_stats[tool_used]["h1"]    += h1
-        tool_stats[tool_used]["h5"]    += h5
-        tool_stats[tool_used]["mrr"]   += rr
-        tool_stats[tool_used]["rl"]    += rl
-        tool_stats[tool_used]["count"] += 1
-
-        cat_stats[category]["h1"]    += h1
-        cat_stats[category]["mrr"]   += rr
-        cat_stats[category]["rl"]    += rl
-        cat_stats[category]["count"] += 1
-
-        judge_str = f"Judge={judge_score}" if judge_score is not None else "Judge=N/A"
+        h1_str = f"{h1:.0f}" if h1 is not None else "N/A"
+        rr_str = f"{rr:.2f}" if rr is not None else "N/A"
+        j_str  = str(judge_score) if judge_score is not None else "N/A"
         print(
-            f"  [{tool_used}] Hit@1={h1:.0f}  MRR={rr:.2f}  "
-            f"ROUGE-L={rl:.2f}  {judge_str}  {result['latency']:.1f}s"
+            f"  [{tool_used}][{src_label}] "
+            f"Hit@1={h1_str}  MRR={rr_str}  "
+            f"ROUGE-L={rl:.2f}  KW={kw_score:.2f}  "
+            f"Judge={j_str}  {result['latency']:.1f}s"
         )
 
-    # ── Post-loop metrics ────────────────────────────────────────
+    # ── Post-loop ─────────────────────────────────────────────
     bert_f1  = compute_bert_score(all_predictions, all_references)
     tool_acc = compute_tool_accuracy(all_results, test_set)
 
     latencies_s = sorted(latencies)
-    n_lat   = len(latencies_s)
-    lat_p50 = latencies_s[n_lat // 2]          if n_lat else 0.0
-    lat_p95 = latencies_s[int(n_lat * 0.95)]   if n_lat else 0.0
-    lat_avg = sum(latencies_s) / n_lat          if n_lat else 0.0
+    n_lat    = len(latencies_s)
+    lat_p50  = latencies_s[n_lat // 2]        if n_lat else 0.0
+    lat_p95  = latencies_s[int(n_lat * 0.95)] if n_lat else 0.0
+    lat_avg  = sum(latencies_s) / n_lat        if n_lat else 0.0
+    avg_steps = sum(step_counts) / len(step_counts) if step_counts else 0.0
+    max_steps = max(step_counts)                    if step_counts else 0
+    judge_avg = sum(judge_scores) / len(judge_scores) if judge_scores else None
+    judge_n   = len(judge_scores)
 
-    avg_steps  = sum(step_counts) / len(step_counts) if step_counts else 0.0
-    max_steps  = max(step_counts)                    if step_counts else 0
-    judge_avg  = sum(judge_scores) / len(judge_scores) if judge_scores else None
-    judge_n    = len(judge_scores)
+    denom_ret = max(n_retrieval_done, 1)  # denominator cho retrieval metrics
 
     # ── Summary ───────────────────────────────────────────────
-    print("\n" + "=" * 65)
+    print("\n" + "=" * 70)
     print("EVALUATION RESULTS")
-    print("=" * 65)
+    print("=" * 70)
+    print(f"Total: {n} questions  |  Retrieval-evaluable: {n_retrieval_done}  |  Q&A source: {n_from_qa}")
 
-    if bm25_available:
+    if bm25_available and n_retrieval_done > 0:
         print(f"\n{'Metric':<12} {'BM25':>8} {'Agent':>8} {'Delta':>8}")
         print("-" * 44)
         for name, b, a in [
-            ("Hit@1",  bm25_h1/n,  ag_h1/n),
-            ("Hit@5",  bm25_h5/n,  ag_h5/n),
-            ("MRR",    bm25_mrr/n, ag_mrr/n),
+            ("Hit@1",  bm25_h1/denom_ret,  ag_h1/denom_ret),
+            ("Hit@5",  bm25_h5/denom_ret,  ag_h5/denom_ret),
+            ("MRR",    bm25_mrr/denom_ret, ag_mrr/denom_ret),
         ]:
-            d    = a - b
-            pct  = (d / b * 100) if b > 0 else float("nan")
+            d   = a - b
+            pct = (d / b * 100) if b > 0 else float("nan")
             pcts = f"{pct:+.1f}%" if b > 0 else "N/A"
             print(f"{name:<12} {b:>8.3f} {a:>8.3f} {d:>+8.3f}  ({pcts})")
-    else:
+    elif n_retrieval_done > 0:
         print(f"\n{'Metric':<12} {'Agent':>8}")
         print("-" * 24)
-        for name, val in [("Hit@1", ag_h1/n), ("Hit@5", ag_h5/n), ("MRR", ag_mrr/n)]:
+        for name, val in [
+            ("Hit@1", ag_h1/denom_ret),
+            ("Hit@5", ag_h5/denom_ret),
+            ("MRR",   ag_mrr/denom_ret),
+        ]:
             print(f"{name:<12} {val:>8.3f}")
+    else:
+        print("\n⚠ No retrieval metrics (all questions from Q&A source without matched_article_id)")
+        print("  → Fill 'matched_article_id' in test set to enable Hit@K/MRR")
 
-    print(f"\n--- Answer Quality ---")
-    print(f"  {'ROUGE-L':<18} {ag_rl/n:.3f}")
+    print(f"\n--- Answer Quality (all {n} questions) ---")
+    print(f"  {'ROUGE-L':<20} {ag_rl/n:.3f}")
+    print(f"  {'Keyword Accuracy':<20} {ag_kw/n:.3f}")
     bert_str  = f"{bert_f1:.3f}" if bert_f1 is not None else "N/A (not installed)"
     judge_str = f"{judge_avg:.2f}/5.0  (n={judge_n}/{n} valid)" if judge_avg is not None else "N/A"
-    print(f"  {'BERT-Score F1':<18} {bert_str}")
-    print(f"  {'LLM-Judge avg':<18} {judge_str}")
+    print(f"  {'BERT-Score F1':<20} {bert_str}")
+    print(f"  {'LLM-Judge avg':<20} {judge_str}")
 
     print(f"\n--- Agent Quality ---")
     if tool_acc["total"] > 0:
@@ -429,97 +494,113 @@ def evaluate():
     print(f"  Latency p95:    {lat_p95:.2f}s")
     print(f"  Latency avg:    {lat_avg:.2f}s")
 
-    # ── Tool Accuracy confusion ───────────────────────────────
     if tool_acc["confusion"]:
         print("\n--- Tool Accuracy Confusion ---")
         for pair, count in sorted(tool_acc["confusion"].items()):
             mark = "✓" if pair.split("->")[0] == pair.split("->")[1] else "✗"
             print(f"  {pair:<28} {count:>3}  {mark}")
 
-    # ── Per-tool ──────────────────────────────────────────────
     if tool_stats:
         print("\n--- Per-Tool Breakdown ---")
-        print(f"{'Tool':<12} {'N':>4} {'Hit@1':>7} {'Hit@5':>7} {'MRR':>7} {'ROUGE-L':>9} {'Judge':>7}")
-        print("-" * 60)
+        print(f"{'Tool':<12} {'N':>4} {'Hit@1':>7} {'MRR':>7} {'ROUGE-L':>9} {'KW-Acc':>8} {'Judge':>7}")
+        print("-" * 65)
         for tool, s in sorted(tool_stats.items()):
-            c = s["count"]
-            j = f"{s['judge_sum']/s['judge_n']:.2f}" if s["judge_n"] else "  N/A"
+            c  = s["count"]
+            rc = s["retrieval_count"]
+            h1_s = f"{s['h1']/rc:.3f}" if rc else "  N/A"
+            mr_s = f"{s['mrr']/rc:.3f}" if rc else "  N/A"
+            j    = f"{s['judge_sum']/s['judge_n']:.2f}" if s["judge_n"] else "  N/A"
             print(
                 f"{tool:<12} {c:>4} "
-                f"{s['h1']/c:>7.3f} {s['h5']/c:>7.3f} "
-                f"{s['mrr']/c:>7.3f} {s['rl']/c:>9.3f} {j:>7}"
+                f"{h1_s:>7} {mr_s:>7} "
+                f"{s['rl']/c:>9.3f} {s['kw']/c:>8.3f} {j:>7}"
             )
 
-    # ── Per-category ──────────────────────────────────────────
     if len(cat_stats) > 1:
         print("\n--- Per-Category Breakdown ---")
-        print(f"{'Category':<14} {'N':>4} {'Hit@1':>7} {'MRR':>7} {'ROUGE-L':>9} {'Judge':>7}")
-        print("-" * 54)
+        print(f"{'Category':<14} {'N':>4} {'Hit@1':>7} {'MRR':>7} {'ROUGE-L':>9} {'KW-Acc':>8} {'Judge':>7}")
+        print("-" * 65)
         for cat, s in sorted(cat_stats.items()):
-            c = s["count"]
-            j = f"{s['judge_sum']/s['judge_n']:.2f}" if s["judge_n"] else "  N/A"
+            c  = s["count"]
+            rc = s["retrieval_count"]
+            h1_s = f"{s['h1']/rc:.3f}" if rc else "  N/A"
+            mr_s = f"{s['mrr']/rc:.3f}" if rc else "  N/A"
+            j    = f"{s['judge_sum']/s['judge_n']:.2f}" if s["judge_n"] else "  N/A"
             print(
                 f"{cat:<14} {c:>4} "
-                f"{s['h1']/c:>7.3f} {s['mrr']/c:>7.3f} "
-                f"{s['rl']/c:>9.3f} {j:>7}"
+                f"{h1_s:>7} {mr_s:>7} "
+                f"{s['rl']/c:>9.3f} {s['kw']/c:>8.3f} {j:>7}"
             )
 
-    print("=" * 65)
+    print("=" * 70)
 
-    # ── Save ──────────────────────────────────────────────────
+    # ── Save results ──────────────────────────────────────────
     results: dict = {
-        "run_id":          run_id,
-        "total_questions": n,
+        "run_id":              run_id,
+        "test_set_path":       str(test_set_path),
+        "total_questions":     n,
+        "retrieval_evaluable": n_retrieval_done,
+        "qa_source_count":     n_from_qa,
         "agent": {
-            "hit@1":             round(ag_h1/n,  3),
-            "hit@5":             round(ag_h5/n,  3),
-            "mrr":               round(ag_mrr/n, 3),
-            "rouge_l":           round(ag_rl/n,  3),
-            "bert_score_f1":     round(bert_f1, 3) if bert_f1 is not None else None,
-            "llm_judge_avg":     round(judge_avg, 3) if judge_avg is not None else None,
-            "llm_judge_n_valid": judge_n,
-            "tool_accuracy":     round(tool_acc["accuracy"], 3),
-            "tool_accuracy_n":   tool_acc["total"],
-            "latency_p50":       round(lat_p50, 3),
-            "latency_p95":       round(lat_p95, 3),
-            "latency_avg":       round(lat_avg, 3),
-            "avg_steps":         round(avg_steps, 2),
-            "max_steps":         max_steps,
+            "hit@1":              round(ag_h1/denom_ret,  3) if n_retrieval_done else None,
+            "hit@5":              round(ag_h5/denom_ret,  3) if n_retrieval_done else None,
+            "mrr":                round(ag_mrr/denom_ret, 3) if n_retrieval_done else None,
+            "rouge_l":            round(ag_rl/n,  3),
+            "keyword_accuracy":   round(ag_kw/n,  3),
+            "bert_score_f1":      round(bert_f1, 3) if bert_f1 is not None else None,
+            "llm_judge_avg":      round(judge_avg, 3) if judge_avg is not None else None,
+            "llm_judge_n_valid":  judge_n,
+            "tool_accuracy":      round(tool_acc["accuracy"], 3),
+            "tool_accuracy_n":    tool_acc["total"],
+            "latency_p50":        round(lat_p50, 3),
+            "latency_p95":        round(lat_p95, 3),
+            "latency_avg":        round(lat_avg, 3),
+            "avg_steps":          round(avg_steps, 2),
+            "max_steps":          max_steps,
         },
+        "bm25": {
+            "hit@1": round(bm25_h1/denom_ret,  3),
+            "hit@5": round(bm25_h5/denom_ret,  3),
+            "mrr":   round(bm25_mrr/denom_ret, 3),
+        } if bm25_available and n_retrieval_done else None,
         "tool_accuracy_confusion": tool_acc["confusion"],
         "per_tool": {
             tool: {
-                "count":     s["count"],
-                "hit@1":     round(s["h1"]  / s["count"], 3),
-                "hit@5":     round(s["h5"]  / s["count"], 3),
-                "mrr":       round(s["mrr"] / s["count"], 3),
-                "rouge_l":   round(s["rl"]  / s["count"], 3),
-                "llm_judge": round(s["judge_sum"] / s["judge_n"], 3) if s["judge_n"] else None,
+                "count":          s["count"],
+                "retrieval_count": s["retrieval_count"],
+                "hit@1":          round(s["h1"]/s["retrieval_count"],  3) if s["retrieval_count"] else None,
+                "mrr":            round(s["mrr"]/s["retrieval_count"], 3) if s["retrieval_count"] else None,
+                "rouge_l":        round(s["rl"]/s["count"],  3),
+                "keyword_accuracy": round(s["kw"]/s["count"], 3),
+                "llm_judge":      round(s["judge_sum"]/s["judge_n"], 3) if s["judge_n"] else None,
             }
             for tool, s in tool_stats.items()
         },
         "per_category": {
             cat: {
-                "count":     s["count"],
-                "hit@1":     round(s["h1"]  / s["count"], 3),
-                "mrr":       round(s["mrr"] / s["count"], 3),
-                "rouge_l":   round(s["rl"]  / s["count"], 3),
-                "llm_judge": round(s["judge_sum"] / s["judge_n"], 3) if s["judge_n"] else None,
+                "count":          s["count"],
+                "hit@1":          round(s["h1"]/s["retrieval_count"],  3) if s["retrieval_count"] else None,
+                "mrr":            round(s["mrr"]/s["retrieval_count"], 3) if s["retrieval_count"] else None,
+                "rouge_l":        round(s["rl"]/s["count"],  3),
+                "keyword_accuracy": round(s["kw"]/s["count"], 3),
+                "llm_judge":      round(s["judge_sum"]/s["judge_n"], 3) if s["judge_n"] else None,
             }
             for cat, s in cat_stats.items()
         },
     }
-    if bm25_available:
-        results["bm25"] = {
-            "hit@1": round(bm25_h1/n,  3),
-            "hit@5": round(bm25_h5/n,  3),
-            "mrr":   round(bm25_mrr/n, 3),
-        }
 
     out = Path("data/eval_results.json")
     out.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"\nSaved -> {out}")
+    print(f"\nSaved → {out}")
 
+
+# ── CLI ───────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    evaluate()
+    parser = argparse.ArgumentParser(description="Evaluate KBQA agent")
+    parser.add_argument(
+        "--test-set", type=Path, default=TEST_SET_FILE,
+        help=f"Path to test set JSON (default: {TEST_SET_FILE})"
+    )
+    args = parser.parse_args()
+    evaluate(test_set_path=args.test_set)

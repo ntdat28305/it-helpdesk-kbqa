@@ -206,3 +206,22 @@ def test_get_community_context_returns_empty_below_threshold():
             retriever=retriever_mock,
         )
         assert result == "", f"Expected empty string for low-score match, got: {result!r}"
+
+
+# ─────────────────────────────────────────────────────────────
+# S1.4 — LLM judge model upgrade
+# ─────────────────────────────────────────────────────────────
+
+def test_judge_model_is_70b():
+    """evaluate.py must use llama-3.3-70b-versatile as the judge model."""
+    import importlib.util, sys
+    # Stub groq so the module imports without a real API key
+    sys.modules.setdefault("groq", __import__("unittest.mock", fromlist=["MagicMock"]).MagicMock())
+    spec = importlib.util.spec_from_file_location(
+        "evaluate", "scripts/evaluate.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert hasattr(mod, "JUDGE_MODEL"), "JUDGE_MODEL constant not found in evaluate.py"
+    assert mod.JUDGE_MODEL == "llama-3.3-70b-versatile", \
+        f"Expected llama-3.3-70b-versatile, got {mod.JUDGE_MODEL!r}"
