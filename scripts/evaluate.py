@@ -33,6 +33,7 @@ import uuid
 from collections import defaultdict
 from pathlib import Path
 
+import numpy as np
 import requests
 from dotenv import load_dotenv
 from rouge_score import rouge_scorer
@@ -209,6 +210,94 @@ def _get_groq_client():
         api_key = os.getenv("GROQ_API_KEY_2") or os.getenv("GROQ_API_KEY_1")
         _groq_client = Groq(api_key=api_key)
     return _groq_client
+
+
+FAITHFULNESS_PROMPT = """\
+Given this IT helpdesk context and agent answer, count how many factual claims in the answer are directly supported by the context.
+
+Context: {context}
+
+Answer: {answer}
+
+Count the total number of factual claims in the answer, then count how many are supported by the context.
+Return ONLY valid JSON, no markdown:
+{{"supported": 3, "total": 4}}"""
+
+
+def faithfulness_score(answer: str, context: str) -> float | None:
+    """RAGAS-style faithfulness: fraction of answer claims supported by context."""
+    if not answer or not context:
+        return None
+    try:
+        client = _get_groq_client()
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": FAITHFULNESS_PROMPT.format(
+                context=context[:1200],
+                answer=answer[:600],
+            )}],
+            temperature=0,
+            max_tokens=40,
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        parsed    = json.loads(raw)
+        supported = int(parsed.get("supported", 0))
+        total     = int(parsed.get("total", 0))
+        return supported / total if total > 0 else None
+    except Exception:
+        return None
+
+
+ANSWER_RELEVANCY_PROMPT = """\
+Given this IT helpdesk answer, generate exactly 3 questions that this answer would be a good response to.
+Return ONLY a JSON array of 3 strings.
+
+Answer: {answer}
+
+Questions (JSON array of 3):"""
+
+_st_model: object = None
+
+
+def _get_st_model():
+    global _st_model
+    if _st_model is None:
+        from sentence_transformers import SentenceTransformer
+        _st_model = SentenceTransformer("all-MiniLM-L6-v2")
+    return _st_model
+
+
+def answer_relevancy_score(question: str, answer: str) -> float | None:
+    """RAGAS-style answer relevancy: cosine sim of reverse-generated questions to original."""
+    if not answer:
+        return None
+    try:
+        client = _get_groq_client()
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": ANSWER_RELEVANCY_PROMPT.format(
+                answer=answer[:600]
+            )}],
+            temperature=0,
+            max_tokens=200,
+        )
+        raw = resp.choices[0].message.content.strip()
+        raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        gen_questions = json.loads(raw)
+        if not isinstance(gen_questions, list) or not gen_questions:
+            return None
+    except Exception:
+        return None
+
+    try:
+        st       = _get_st_model()
+        orig_vec = st.encode(question, normalize_embeddings=True)
+        gen_vecs = st.encode(gen_questions, normalize_embeddings=True)
+        scores   = gen_vecs @ orig_vec
+        return float(np.mean(scores))
+    except Exception:
+        return None
 
 
 def llm_judge(question: str, reference: str, agent_answer: str) -> int | None:
