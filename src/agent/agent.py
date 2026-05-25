@@ -292,15 +292,26 @@ def load_resources() -> dict:
 
     sem_path       = Path("models/embeddings/node_semantic_embeddings.npy")
     retriever_path = Path("models/retriever")
-    if sem_path.exists() and retriever_path.exists():
+
+    if sem_path.exists():
         from sentence_transformers import SentenceTransformer as _ST
         resources["node_semantic_emb"] = np.load(sem_path)
+        logger.info(
+            f"Loaded node_semantic_emb: shape={resources['node_semantic_emb'].shape}"
+        )
+
+    if retriever_path.exists():
+        from sentence_transformers import SentenceTransformer as _ST
         resources["retriever"] = _ST(str(retriever_path))
         logger.info(f"Loaded finetuned retriever: {retriever_path}")
+    elif sem_path.exists():
+        from sentence_transformers import SentenceTransformer as _ST
+        resources["base_encoder"] = _ST("all-MiniLM-L6-v2")
+        logger.info("Loaded base encoder: all-MiniLM-L6-v2 (no finetuned retriever)")
     else:
         logger.warning(
-            "Finetuned retriever khong tim thay -- fallback sang fuzzy match. "
-            "Chay finetune_retriever.py va train_gcn de kich hoat semantic search."
+            "node_semantic_embeddings.npy not found -- fallback to fuzzy match. "
+            "Run train_gcn.py to generate semantic embeddings."
         )
 
     return resources
@@ -358,23 +369,35 @@ def embedding_search(
     name2idx   = resources["name2idx"]
     node_names = list(name2idx.keys())
 
-    if "retriever" in resources and "node_semantic_emb" in resources:
-        query_vec       = resources["retriever"].encode(query_entity, normalize_embeddings=True)
+    if "node_semantic_emb" in resources:
+        # Pick encoder: finetuned retriever preferred, base encoder fallback
+        if "retriever" in resources:
+            encoder      = resources["retriever"]
+            encoder_name = "finetuned"
+        else:
+            encoder      = resources["base_encoder"]
+            encoder_name = "base(MiniLM)"
+
+        query_vec       = encoder.encode(query_entity, normalize_embeddings=True)
         semantic_scores = resources["node_semantic_emb"] @ query_vec
         matched_idx     = int(np.argmax(semantic_scores))
         matched_name    = idx2name[str(matched_idx)]
         logger.info(
-            f"Semantic match: '{query_entity}' -> '{matched_name}' "
+            f"Semantic match [{encoder_name}]: '{query_entity}' -> '{matched_name}' "
             f"(score={semantic_scores[matched_idx]:.3f})"
         )
     else:
         match_result = fuzz_process.extractOne(query_entity, node_names)
         if not match_result or match_result[1] < EMBEDDING_FUZZY_THRESHOLD:
-            logger.warning(f"Khong tim duoc node gan voi: {query_entity}")
+            logger.warning(
+                f"Fuzzy match failed for '{query_entity}' "
+                f"(score={match_result[1] if match_result else 0} < {EMBEDDING_FUZZY_THRESHOLD}). "
+                "Consider running train_gcn.py to enable semantic search."
+            )
             return []
         matched_name = match_result[0]
         matched_idx  = name2idx[matched_name]
-        logger.info(f"Fuzzy match: '{query_entity}' -> '{matched_name}'")
+        logger.info(f"Fuzzy match [last-resort]: '{query_entity}' -> '{matched_name}'")
 
     query_vec = embeddings[matched_idx]
     scores    = embeddings @ query_vec
