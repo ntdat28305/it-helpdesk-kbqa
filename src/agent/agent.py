@@ -26,6 +26,7 @@ from src.agent.prompts import (
     PREPROCESS_PROMPT,
     PLAN_PROMPT,
     REFLECT_PROMPT,
+    REWRITE_PROMPT,
 )
 from src.utils.logger import get_logger
 
@@ -865,10 +866,31 @@ class ITHelpdeskAgent:
                 )
                 obs_content = obs
                 if any(obs.startswith(m) for m in _EMPTY_OBS):
-                    obs_content = (
-                        obs + "\n\n[Hint: previous tool returned no results. "
-                        "Try a different tool or rephrase the entity more broadly.]"
-                    )
+                    _rewritten = None
+                    if fn_name in ("embedding_search", "cypher_search") and step_input:
+                        try:
+                            _raw_rw = llm_call(
+                                self.client,
+                                REWRITE_PROMPT.format(query=step_input),
+                                max_tokens=30,
+                            )
+                            _rewritten = (_raw_rw or "").strip()
+                            if _rewritten.lower() == step_input.lower():
+                                _rewritten = None
+                        except Exception:
+                            _rewritten = None
+
+                    if _rewritten:
+                        logger.info(f"Query rewrite: '{step_input}' → '{_rewritten}'")
+                        obs_content = (
+                            obs + f"\n\n[Hint: No results for '{step_input}'. "
+                            f"Try embedding_search with rephrased entity: '{_rewritten}'.]"
+                        )
+                    else:
+                        obs_content = (
+                            obs + "\n\n[Hint: previous tool returned no results. "
+                            "Try embedding_search with a more general entity name.]"
+                        )
                 messages.append({
                     "role":         "tool",
                     "tool_call_id": tc.id,

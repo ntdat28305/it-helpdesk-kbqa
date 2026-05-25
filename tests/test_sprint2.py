@@ -145,3 +145,19 @@ def test_load_reflection_lessons_semantic_match(tmp_path):
         assert isinstance(result, list)
     finally:
         ag.REFLEXION_MEMORY_FILE = orig
+
+
+# ── S2.4 query rewriter ───────────────────────────────────────
+
+def test_rewrite_prompt_exists():
+    import sys
+    sys.modules.pop("src.agent.prompts", None)
+    import src.agent.prompts as p
+    assert hasattr(p, "REWRITE_PROMPT")
+    assert len(p.REWRITE_PROMPT) > 20
+
+def test_rewrite_prompt_has_query_placeholder():
+    import sys
+    sys.modules.pop("src.agent.prompts", None)
+    import src.agent.prompts as p
+    assert "{query}" in p.REWRITE_PROMPT

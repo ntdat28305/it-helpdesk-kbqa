@@ -161,3 +161,19 @@ Reply ONLY with valid JSON, no markdown:
 {{"is_ambiguous": false, "topic_changed": false}}
 
 Rule: If {prev} is empty, always return: {{"is_ambiguous": false, "topic_changed": false}}"""
+
+
+# ── Query rewriter (triggered on empty tool results) ─────────
+
+REWRITE_PROMPT = """Rewrite this IT helpdesk query to be broader and more likely to match a knowledge base.
+
+Original query: {query}
+
+Rules:
+- Return ONLY the rewritten entity/concept, nothing else
+- Remove negations ("can't", "won't", "not working") — keep the core IT entity
+- Make it more general: "Cannot access OneDrive files" → "OneDrive Access"
+- Use product/component names: "Teams drops in meeting" → "Teams Meeting Failure"
+- Strip action verbs: "install fails" → "Installation Failure"
+
+Rewritten:"""
