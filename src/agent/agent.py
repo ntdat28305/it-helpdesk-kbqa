@@ -57,6 +57,15 @@ _RE_BFS = re.compile(
     r'connection between|when .+ and .+)\b',
     re.IGNORECASE,
 )
+_RE_GLOBAL = re.compile(
+    r'\b(overview|themes?|'
+    r'summarize\s+(the\s+)?(it|knowledge|helpdesk)|'
+    r'main\s+(it\s+)?topics?|'
+    r'what\s+are\s+the\s+(main|common|key)|'
+    r'common\s+issues?\s+in|'
+    r'list\s+(all\s+)?(it\s+)?topics?)\b',
+    re.IGNORECASE,
+)
 
 
 def _forced_tool(question: str) -> str:
@@ -65,6 +74,8 @@ def _forced_tool(question: str) -> str:
         return "cypher_search"
     if _RE_BFS.search(question):
         return "bfs_search"
+    if _RE_GLOBAL.search(question):
+        return "global_search"
     if _RE_WEBSEARCH.search(question):
         return "web_search"
     return "embedding_search"
@@ -216,6 +227,31 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "global_search",
+            "description": (
+                "Retrieve a high-level overview of IT knowledge domains by summarizing "
+                "the top-matching community clusters from the knowledge base. "
+                "ONLY use when the question asks for a broad overview, list of themes, "
+                "or summary of what IT topics are covered. "
+                "Examples: 'What are the main IT issues?', 'Give me an overview of MDM topics', "
+                "'Summarize the IT knowledge base'. "
+                "Do NOT use for specific troubleshooting questions."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The overview or summary question.",
+                    }
+                },
+                "required": ["question"],
+            },
+        },
+    },
 ]
 
 _TOOL_NAME_MAP = {
@@ -223,6 +259,7 @@ _TOOL_NAME_MAP = {
     "embedding_search": "EMBEDDING",
     "bfs_search":       "BFS",
     "web_search":       "WEBSEARCH",
+    "global_search":    "GLOBAL",
 }
 
 
@@ -442,6 +479,26 @@ def web_search(query: str) -> dict:
         return {"text": "", "urls": []}
 
 
+def global_search(question: str, resources: dict, top_k: int = 3) -> str:
+    """Return top-k community summaries via embedding similarity."""
+    if "community_embs" not in resources or "communities" not in resources:
+        return "No community data available."
+    retriever = resources.get("retriever")
+    if retriever is None:
+        return "Retriever not loaded — cannot perform global search."
+    query_vec = retriever.encode(question, normalize_embeddings=True)
+    scores    = resources["community_embs"] @ query_vec
+    comm_ids  = resources.get("community_ids", list(resources["communities"].keys()))
+    top_indices = np.argsort(scores)[::-1][:top_k]
+    parts = []
+    for idx in top_indices:
+        cid     = comm_ids[idx]
+        summary = resources["communities"][cid].get("summary", "")
+        if summary and scores[idx] > 0.2:
+            parts.append(f"• {summary}")
+    return "\n".join(parts) if parts else "No relevant topic clusters found."
+
+
 # ── Main Agent ────────────────────────────────────────────────
 
 class ITHelpdeskAgent:
@@ -585,6 +642,11 @@ class ITHelpdeskAgent:
             sources.extend(result.get("urls", []))
             obs = result.get("text") or "No web results found."
             return obs, sources, ""
+
+        if fn_name == "global_search":
+            question_arg = args.get("question", "")
+            obs = global_search(question_arg, self.resources)
+            return obs, [], ""
 
         return "Unknown tool.", [], ""
 
