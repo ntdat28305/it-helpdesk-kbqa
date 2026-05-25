@@ -287,9 +287,11 @@ The core of the system is `ITHelpdeskAgent` in [src/agent/agent.py](src/agent/ag
 ```
 User Question
      │
-     ├─ Regex pre-routing
-     │     0x... / ERROR_* / KB\d+ → force CYPHER
-     │     24H2 / latest version   → force WEBSEARCH
+     ├─ Regex pre-routing  (_forced_tool)
+     │     0x... / ERROR_* / KB\d+            → force CYPHER
+     │     "what causes" / "how does" / etc.  → force BFS
+     │     24H2 / latest / recent             → force WEBSEARCH
+     │     everything else                    → force EMBEDDING (default)
      │
      ├─ Ambiguity detection  (8B)
      │     "how do I fix it?" with prior context → resolve pronouns from history
@@ -340,25 +342,29 @@ User Question
 
 ## Evaluation
 
-### Test Set Generation
+### Test Set
 
+The evaluation uses **100 real user questions** scraped from Microsoft Q&A (`data/qa_testset.json`), stratified across 4 IT categories (DeviceMgmt=30, Identity=25, Network=20, Teams=25).
+
+**Regenerate the test set:**
 ```bash
-# Generate 50 stratified natural-language questions from raw articles
-python scripts/generate_testset.py --limit 50
+python scripts/scrape_qa.py --limit 100       # → data/qa_testset_raw.json
+python scripts/match_articles.py              # hybrid BM25 + MiniLM matching
+python scripts/clean_matches.py               # → data/qa_testset.json
 ```
 
-Questions mimic real user complaints (*"My computer keeps crashing after the latest update"*) rather than technical queries.
+`match_articles.py` uses hybrid scoring (alpha=0.6 BM25 + 0.4 cosine similarity via `all-MiniLM-L6-v2`). Embeddings are cached at `data/.cache/article_embeddings.npz`.
 
 ### Run Evaluation
 
 ```bash
 # Requires FastAPI to be running on port 8000
-python scripts/evaluate.py
+PYTHONUTF8=1 python scripts/evaluate.py --test-set data/qa_testset.json
 ```
 
-Metrics: **Hit@1**, **Hit@5**, **MRR**, **ROUGE-L**. Compared against a BM25 baseline that retrieves directly from the full article corpus.
+Metrics: **Hit@1**, **Hit@5**, **MRR**, **ROUGE-L**, **Keyword Accuracy**, **LLM-Judge** (Groq `GROQ_KEY_2`), **Tool Accuracy**, **Latency p50/p95**. Compared against a BM25 baseline.
 
-### Results (n = 49)
+### Results (n = 100, Microsoft Q&A)
 
 <table>
 <tr>
@@ -366,31 +372,38 @@ Metrics: **Hit@1**, **Hit@5**, **MRR**, **ROUGE-L**. Compared against a BM25 bas
   <th align="center">BM25 Baseline</th>
   <th align="center">ReAct Agent</th>
 </tr>
-<tr><td><b>Hit@1</b></td><td align="center">0.347</td><td align="center">0.122</td></tr>
-<tr><td><b>Hit@5</b></td><td align="center">0.469</td><td align="center">0.224</td></tr>
-<tr><td><b>MRR</b></td><td align="center">0.398</td><td align="center">0.181</td></tr>
-<tr><td><b>ROUGE-L</b></td><td align="center">—</td><td align="center">0.121</td></tr>
+<tr><td><b>Hit@1</b></td><td align="center">0.263</td><td align="center">0.030</td></tr>
+<tr><td><b>Hit@5</b></td><td align="center">0.626</td><td align="center">0.051</td></tr>
+<tr><td><b>MRR</b></td><td align="center">0.395</td><td align="center">0.046</td></tr>
+<tr><td><b>ROUGE-L</b></td><td align="center">—</td><td align="center">0.116</td></tr>
+<tr><td><b>Keyword Accuracy</b></td><td align="center">—</td><td align="center">0.267</td></tr>
+<tr><td><b>LLM-Judge</b></td><td align="center">—</td><td align="center">3.19 / 5.0</td></tr>
+<tr><td><b>Tool Accuracy</b></td><td align="center">—</td><td align="center"><b>89%</b></td></tr>
+<tr><td><b>Latency p50</b></td><td align="center">—</td><td align="center">42.7s</td></tr>
 </table>
 
-### Per-Tool Performance
+> **Note on Hit@K:** The Q&A test set uses `matched_article_id` assigned by hybrid similarity matching (not human annotation), so Hit@K reflects KG coverage rather than answer correctness. LLM-Judge and ROUGE-L are the more meaningful quality metrics for this dataset.
 
-| Tool | N | Hit@1 | Hit@5 | MRR | ROUGE-L |
-|---|---|---|---|---|---|
-| CYPHER | 4 | 0.250 | 0.250 | 0.250 | 0.116 |
-| EMBEDDING | 24 | 0.125 | 0.292 | 0.208 | 0.121 |
-| BFS | 8 | 0.125 | 0.250 | 0.182 | 0.114 |
-| WEBSEARCH | 13 | 0.077 | 0.077 | 0.110 | 0.126 |
+### Tool Accuracy Detail
+
+Tool accuracy improved from **60% → 89%** after rewriting `SYSTEM_PROMPT` with explicit `DO NOT` constraints and extending `_forced_tool()` with BFS detection and embedding as hard default.
+
+| Routing | Count | Status |
+|---|---|---|
+| EMBEDDING → EMBEDDING | 88 | ✓ correct |
+| CYPHER → CYPHER | 1 | ✓ correct |
+| EMBEDDING → CYPHER | 3 | ✗ (was 22) |
+| EMBEDDING → WEBSEARCH | 1 | ✗ (was 9) |
+| API timeout / error | 3 | ✗ |
 
 ### Per-Category Performance
 
-| Category | N | Hit@1 | MRR | ROUGE-L |
-|---|---|---|---|---|
-| Network | 11 | 0.182 | 0.251 | 0.125 |
-| DeviceMgmt | 12 | 0.167 | 0.206 | 0.120 |
-| Teams | 12 | 0.083 | 0.206 | 0.112 |
-| Identity | 12 | 0.083 | 0.088 | 0.122 |
-
-> **Note:** The agent is optimized for *answer quality* and *multi-turn conversation*, not pure retrieval recall. BM25 operates directly on the full article corpus; the agent retrieves through a Knowledge Graph with LLM-based entity extraction as an intermediary — a fundamentally different retrieval paradigm.
+| Category | N | Hit@1 | MRR | ROUGE-L | LLM-Judge |
+|---|---|---|---|---|---|
+| DeviceMgmt | 30 | 0.033 | 0.058 | 0.136 | 3.60 |
+| Identity | 25 | 0.042 | 0.062 | 0.138 | 3.25 |
+| Teams | 25 | 0.000 | 0.014 | 0.116 | 3.22 |
+| Network | 20 | 0.050 | 0.050 | 0.057 | 2.45 |
 
 ---
 
@@ -491,18 +504,28 @@ it-helpdesk-kbqa/
 │
 ├── scripts/
 │   ├── discover_urls.py            # Microsoft Learn URL discovery
-│   ├── generate_testset.py         # LLM-generated stratified test set
-│   ├── evaluate.py                 # Hit@K, MRR, ROUGE-L evaluation vs BM25
+│   ├── scrape_qa.py                # Microsoft Q&A scraper → real user questions
+│   ├── match_articles.py           # Hybrid BM25+MiniLM article matching for test set
+│   ├── clean_matches.py            # Filter + re-rank matched articles → qa_testset.json
+│   ├── generate_testset.py         # LLM-generated stratified test set (legacy)
+│   ├── evaluate.py                 # Hit@K, MRR, ROUGE-L, Tool Accuracy, LLM-Judge
 │   ├── generate_finetune_data.py   # Domain entity pairs for contrastive training
 │   └── finetune_retriever.py       # Sentence-transformer finetuning
+│
+├── tests/
+│   ├── test_agent_routing.py       # Unit tests: _forced_tool routing + SYSTEM_PROMPT content
+│   ├── test_match_articles.py      # Unit tests: hybrid scoring functions
+│   └── test_clean_matches.py       # Unit tests: clean() threshold filtering
 │
 ├── data/
 │   ├── raw/                        # Scraped articles (gitignored)
 │   ├── processed/                  # Extracted entities (gitignored)
+│   ├── .cache/                     # article_embeddings.npz (MiniLM cache, gitignored)
 │   ├── discovered_urls.json        # 378 article URLs
 │   ├── communities.json            # Leiden community assignments
 │   ├── community_summaries.json    # LLM summaries per community (required at runtime)
-│   ├── test_set.json               # 50-question evaluation set
+│   ├── qa_testset_raw.json         # 100 raw Microsoft Q&A questions
+│   ├── qa_testset.json             # 100-question evaluation set (with matched_article_id)
 │   └── eval_results.json           # Latest evaluation metrics
 │
 ├── models/
