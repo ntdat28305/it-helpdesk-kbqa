@@ -123,3 +123,24 @@ def test_pairwise_judge_returns_none_on_missing_answers():
     import scripts.evaluate as ev
     result = ev.pairwise_judge("q", "", "answer b")
     assert result is None
+
+# ── S3.4 Annotation template ──────────────────────────────────
+
+def test_generate_annotation_template_produces_correct_structure(tmp_path):
+    import scripts.evaluate as ev
+
+    questions = [
+        {"question": f"Q{i}", "answer": f"A{i}", "category": "MDM",
+         "expected_tool": "EMBEDDING", "article_id": f"art_{i}"}
+        for i in range(5)
+    ]
+    out_path = tmp_path / "annotation.json"
+    with patch("time.sleep"):  # skip actual sleeping in unit test
+        ev.generate_annotation_template(questions, out_path, n=5)
+
+    data = json.loads(out_path.read_text(encoding="utf-8"))
+    assert len(data) == 5
+    assert all("question" in r for r in data)
+    assert all("human_score" in r for r in data)
+    assert all(r["human_score"] is None for r in data)
+    assert all("human_notes" in r for r in data)

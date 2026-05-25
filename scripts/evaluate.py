@@ -363,6 +363,56 @@ def pairwise_judge(
         return None
 
 
+def generate_annotation_template(
+    test_set: list[dict],
+    out_path: "Path",
+    n: int = 30,
+    api_url: str = "http://localhost:8000",
+) -> None:
+    """Generate human annotation template JSON with real agent answers pre-filled.
+
+    Calls the agent API for each question. Leaves human_score (null) and
+    human_notes ('') for the user to fill in manually.
+    Requires the FastAPI backend to be running.
+    """
+    sample = test_set[:n] if len(test_set) >= n else test_set
+    run_id = uuid.uuid4().hex[:6]
+
+    template = []
+    for i, qa in enumerate(sample, 1):
+        question = qa["question"]
+        print(f"  [{i:02d}/{len(sample)}] {question[:60]}...")
+        agent_answer = ""
+        try:
+            resp = requests.post(
+                f"{api_url}/query",
+                json={"question": question, "session_id": f"annotation_{run_id}_{i}"},
+                timeout=90,
+            )
+            resp.raise_for_status()
+            raw = resp.json().get("answer", "")
+            agent_answer = raw if isinstance(raw, str) else ""
+        except Exception as e:
+            print(f"    WARNING: API call failed — {e}. agent_answer will be empty.")
+
+        template.append({
+            "question":         question,
+            "category":         qa.get("category", ""),
+            "expected_tool":    qa.get("expected_tool", ""),
+            "reference_answer": qa.get("ground_truth_answer") or qa.get("answer", ""),
+            "agent_answer":     agent_answer,
+            "human_score":      None,   # USER FILLS: 1-5 (1=wrong, 5=perfect)
+            "human_notes":      "",     # USER FILLS: optional comments
+        })
+        time.sleep(2)   # 2s buffer between API calls to avoid rate limits
+
+    out_path = Path(out_path)
+    out_path.write_text(json.dumps(template, indent=2, ensure_ascii=False), encoding="utf-8")
+    filled = sum(1 for r in template if r["agent_answer"])
+    print(f"Annotation template saved → {out_path}  ({len(template)} questions, {filled} with agent answers)")
+    print("Fill in 'human_score' (1-5) and 'human_notes' for each question.")
+
+
 def llm_judge(question: str, reference: str, agent_answer: str) -> int | None:
     """Score agent answer 1-5 using Groq."""
     if not agent_answer or not reference:
@@ -801,5 +851,19 @@ if __name__ == "__main__":
         "--test-set", type=Path, default=TEST_SET_FILE,
         help=f"Path to test set JSON (default: {TEST_SET_FILE})"
     )
+    parser.add_argument(
+        "--generate-annotation", action="store_true",
+        help="Generate human annotation template JSON (requires backend running)"
+    )
+    parser.add_argument(
+        "--annotation-n", type=int, default=30,
+        help="Number of questions for annotation template (default: 30)"
+    )
     args = parser.parse_args()
-    evaluate(test_set_path=args.test_set)
+
+    if args.generate_annotation:
+        test_set = load_test_set(args.test_set)
+        out = Path("data/human_annotation_template.json")
+        generate_annotation_template(test_set, out, n=args.annotation_n)
+    else:
+        evaluate(test_set_path=args.test_set)
