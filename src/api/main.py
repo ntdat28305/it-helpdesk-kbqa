@@ -75,6 +75,8 @@ class QueryResponse(BaseModel):
     plan_note: str = ""
     confidence: str = "medium"
     reflection_reason: str = ""
+    observations: list[str] = []
+    context: str = ""
 
 
 # ── Session management ────────────────────────────────────────
@@ -132,6 +134,8 @@ async def query(request: QueryRequest):
             plan_note=result.get("plan_note", ""),
             confidence=result.get("confidence", "medium"),
             reflection_reason=result.get("reflection_reason", ""),
+            observations=result.get("observations", []),
+            context=result.get("context", ""),
         )
 
     except Exception as e:

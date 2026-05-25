@@ -23,8 +23,22 @@ __pycache__/
 *.pyo
 *.egg-info/
 
-# KHÔNG ignore models — cần cho deployment
-# models/
+# Large model binaries — quá lớn cho GitHub (>100MB)
+models/retriever/model.safetensors
+models/embeddings/node_semantic_embeddings.npy
+
+# Intermediate / generated data files
+data/qa_testset_matched.json
+data/qa_testset_raw.json
+data/qa_testset_clean.json
+data/qa_testset_backup_*.json
+data/eval_checkpoint.jsonl
+data/reflexion_memory.jsonl
+
+# Internal planning docs
+docs/superpowers/
+continual_learning_strategy.md
+metrics_analysis.md
 
 CLAUDE.md
 .claude/

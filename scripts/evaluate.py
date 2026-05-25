@@ -42,8 +42,13 @@ load_dotenv()
 
 JUDGE_MODEL   = "llama-3.3-70b-versatile"
 
-TEST_SET_FILE = Path("data/test_set.json")
-RAW_DIR       = Path("data/raw")
+TEST_SET_FILE   = Path("data/test_set.json")
+CHECKPOINT_FILE = Path("data/eval_checkpoint.jsonl")
+FALLBACK_ANSWER = (
+    "I couldn't find relevant information. "
+    "Please try rephrasing or contact IT support."
+)
+RAW_DIR = Path("data/raw")
 API_URL       = os.environ.get("API_URL", "http://localhost:8000")
 
 _rouge = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=False)
@@ -133,20 +138,24 @@ def agent_search(
             for url in sources
         ]
         return {
-            "article_ids": article_ids,
-            "tool_used":   tool_used,
-            "answer":      answer,
-            "latency":     latency,
-            "steps_count": steps_count,
+            "article_ids":  article_ids,
+            "tool_used":    tool_used,
+            "answer":       answer,
+            "latency":      latency,
+            "steps_count":  steps_count,
+            "observations": data.get("observations", []),
+            "context":      data.get("context", ""),
         }
     except Exception as e:
         print(f"  API error: {e}")
         return {
-            "article_ids": [],
-            "tool_used":   "ERROR",
-            "answer":      "",
-            "latency":     time.time() - start,
-            "steps_count": 0,
+            "article_ids":  [],
+            "tool_used":    "ERROR",
+            "answer":       "",
+            "latency":      time.time() - start,
+            "steps_count":  0,
+            "observations": [],
+            "context":      "",
         }
 
 
@@ -213,16 +222,46 @@ Rate the agent's answer on a scale of 1-5:
 
 Output ONLY the number (1-5):"""
 
+_GROQ_KEYS = [k for k in [os.getenv(f"GROQ_API_KEY_{i}") for i in range(1, 6)] if k]
+_groq_key_idx = 0
 _groq_client: object = None
 
 
 def _get_groq_client():
-    global _groq_client
+    global _groq_client, _groq_key_idx
     if _groq_client is None:
         from groq import Groq
-        api_key = os.getenv("GROQ_API_KEY_2") or os.getenv("GROQ_API_KEY_1")
-        _groq_client = Groq(api_key=api_key)
+        if _GROQ_KEYS:
+            _groq_client = Groq(api_key=_GROQ_KEYS[_groq_key_idx])
     return _groq_client
+
+
+def _rotate_groq_key() -> bool:
+    """Switch to next API key. Returns True if rotation succeeded."""
+    global _groq_client, _groq_key_idx
+    if _groq_key_idx < len(_GROQ_KEYS) - 1:
+        _groq_key_idx += 1
+        from groq import Groq
+        _groq_client = Groq(api_key=_GROQ_KEYS[_groq_key_idx])
+        print(f"  [key-rotate] Switched to GROQ_API_KEY_{_groq_key_idx + 1}")
+        return True
+    return False
+
+
+def _groq_call(**kwargs):
+    """Groq API call with automatic key rotation on 429 rate limit."""
+    attempts = max(len(_GROQ_KEYS), 1)
+    for _ in range(attempts):
+        client = _get_groq_client()
+        if client is None:
+            raise RuntimeError("No Groq API keys configured")
+        try:
+            return client.chat.completions.create(**kwargs)
+        except Exception as e:
+            if ("429" in str(e) or "rate_limit" in str(e).lower()) and _rotate_groq_key():
+                continue
+            raise
+    raise RuntimeError("All Groq API keys exhausted")
 
 
 FAITHFULNESS_PROMPT = """\
@@ -242,8 +281,7 @@ def faithfulness_score(answer: str, context: str) -> float | None:
     if not answer or not context:
         return None
     try:
-        client = _get_groq_client()
-        resp = client.chat.completions.create(
+        resp = _groq_call(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": FAITHFULNESS_PROMPT.format(
                 context=context[:1200],
@@ -286,8 +324,7 @@ def answer_relevancy_score(question: str, answer: str) -> float | None:
     if not answer:
         return None
     try:
-        client = _get_groq_client()
-        resp = client.chat.completions.create(
+        resp = _groq_call(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": ANSWER_RELEVANCY_PROMPT.format(
                 answer=answer[:600]
@@ -340,8 +377,7 @@ def pairwise_judge(
     a_sent  = answer_b if flipped else answer_a
     b_sent  = answer_a if flipped else answer_b
     try:
-        client = _get_groq_client()
-        resp = client.chat.completions.create(
+        resp = _groq_call(
             model="llama-3.3-70b-versatile",
             messages=[{"role": "user", "content": PAIRWISE_PROMPT.format(
                 question=question,
@@ -418,8 +454,7 @@ def llm_judge(question: str, reference: str, agent_answer: str) -> int | None:
     if not agent_answer or not reference:
         return None
     try:
-        client = _get_groq_client()
-        resp = client.chat.completions.create(
+        resp = _groq_call(
             model=JUDGE_MODEL,
             messages=[{"role": "user", "content": JUDGE_PROMPT.format(
                 question=question,
@@ -477,7 +512,11 @@ def compute_tool_accuracy(results: list[dict], test_set: list[dict]) -> dict:
 
 # ── Evaluation pipeline ───────────────────────────────────────
 
-def evaluate(test_set_path: Path = TEST_SET_FILE):
+def evaluate(
+    test_set_path: Path = TEST_SET_FILE,
+    resume: bool = False,
+    skip_expected_tool: str | None = None,
+):
     print("Loading test set...")
     test_set = load_test_set(test_set_path)
     n        = len(test_set)
@@ -518,6 +557,26 @@ def evaluate(test_set_path: Path = TEST_SET_FILE):
     run_id = uuid.uuid4().hex[:8]
     print(f"\nRun ID: {run_id}")
 
+    # ── Checkpoint / resume ───────────────────────────────────
+    done_map: dict[int, dict] = {}
+    if resume and CHECKPOINT_FILE.exists():
+        for line in CHECKPOINT_FILE.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                entry = json.loads(line)
+                idx   = entry.get("idx")
+                if (idx
+                        and entry.get("tool_used", "ERROR") != "ERROR"
+                        and entry.get("answer", "")
+                        and entry.get("answer") != FALLBACK_ANSWER):
+                    done_map[idx] = entry
+            except Exception:
+                pass
+        print(f"Resuming: {len(done_map)}/{n} already done, {n - len(done_map)} remaining")
+    elif not resume and CHECKPOINT_FILE.exists():
+        CHECKPOINT_FILE.unlink()
+
     # Accumulators
     bm25_h1 = bm25_h5 = bm25_mrr = 0.0
     ag_h1 = ag_h5 = ag_mrr = ag_rl = ag_kw = 0.0
@@ -550,32 +609,114 @@ def evaluate(test_set_path: Path = TEST_SET_FILE):
     for i, qa in enumerate(test_set, 1):
         question                  = qa["question"]
         article_id, can_eval_ret  = get_article_id(qa)
-        # Dùng ground_truth_answer nếu có (đã fill thủ công), fallback về answer
         ref_answer  = qa.get("ground_truth_answer") or qa.get("answer", "")
         category    = qa.get("category", "?")
         source      = qa.get("source", "learn")
         kw_list     = qa.get("answer_keywords", [])
         src_label   = "QA" if source == "microsoft_qa" else "MS"
+        if skip_expected_tool and qa.get("expected_tool") == skip_expected_tool:
+            print(f"[{i:02d}/{n}] [skip-{skip_expected_tool}] [{src_label}] {question[:55]}...")
+            continue
 
-        print(f"[{i:02d}/{n}] [{src_label}] {question[:60]}...")
+        is_resumed  = i in done_map
 
-        # BM25 (chỉ tính nếu có thể eval retrieval)
+        print(f"[{i:02d}/{n}]{' [ckpt]' if is_resumed else ''} [{src_label}] {question[:60]}...")
+
+        # BM25 (cheap local — always recompute)
         if bm25_available and can_eval_ret:
             bm25_results = bm25_search(bm25, bm25_articles, question, top_k=5)
             bm25_h1  += hit_at_k(bm25_results, article_id, 1)
             bm25_h5  += hit_at_k(bm25_results, article_id, 5)
             bm25_mrr += reciprocal_rank(bm25_results, article_id)
 
-        # Agent
-        session_id = f"eval_{run_id}_{i}"
-        q_start    = time.time()
-        result     = agent_search(question, url_to_id, session_id)
-        elapsed    = time.time() - q_start
-        time.sleep(max(0, 15 - elapsed))
+        if is_resumed:
+            # ── Checkpoint fast-path: reuse stored results ────
+            entry = done_map[i]
+            result = {
+                "article_ids":  entry.get("article_ids", []),
+                "tool_used":    entry["tool_used"],
+                "answer":       entry["answer"],
+                "latency":      entry.get("latency", 0.0),
+                "steps_count":  entry.get("steps_count", 0),
+                "observations": entry.get("observations", []),
+                "context":      entry.get("context", ""),
+            }
+            m           = entry.get("metrics", {})
+            h1          = m.get("h1")
+            h5          = m.get("h5")
+            rr          = m.get("rr")
+            rl          = m.get("rl", 0.0)
+            kw_score    = m.get("kw_score", 0.0)
+            judge_score = m.get("judge_score")
+            faith       = m.get("faith")
+            ar          = m.get("ar")
+            pairwise_v  = m.get("pairwise_verdict")
+        else:
+            # ── Live path: call agent + compute all metrics ───
+            session_id = f"eval_{run_id}_{i}"
+            q_start    = time.time()
+            result     = agent_search(question, url_to_id, session_id)
+            elapsed    = time.time() - q_start
+            time.sleep(max(0, 15 - elapsed))
 
-        ag_results  = result["article_ids"]
-        tool_used   = result["tool_used"]
-        ag_answer   = result["answer"]
+            ag_results = result["article_ids"]
+            ag_answer  = result["answer"]
+
+            # Retrieval metrics
+            if can_eval_ret:
+                h1 = hit_at_k(ag_results, article_id, 1)
+                h5 = hit_at_k(ag_results, article_id, 5)
+                rr = reciprocal_rank(ag_results, article_id)
+            else:
+                h1 = h5 = rr = None
+
+            # Answer quality
+            rl       = rouge_l(ag_answer, ref_answer)
+            kw_score = keyword_accuracy(ag_answer, kw_list)
+
+            # LLM-as-Judge
+            judge_score = llm_judge(question, ref_answer, ag_answer)
+
+            # Faithfulness — only actual KG observations, no community summary fallback
+            obs       = result.get("observations", [])
+            q_context = "\n\n".join(obs) if obs else ""
+            faith     = faithfulness_score(ag_answer, q_context)
+
+            # Answer relevancy
+            ar = answer_relevancy_score(question, ag_answer)
+
+            # Pairwise: agent vs BM25
+            pairwise_v = None
+            if bm25_available and ag_answer:
+                bm25_ans = bm25_answer(bm25, bm25_articles, question, top_k=3)
+                if bm25_ans:
+                    pairwise_v = pairwise_judge(question, ag_answer, bm25_ans)
+
+            # Append to checkpoint
+            with open(CHECKPOINT_FILE, "a", encoding="utf-8") as _ckpt_f:
+                _ckpt_f.write(json.dumps({
+                    "idx":          i,
+                    "question":     question,
+                    "tool_used":    result["tool_used"],
+                    "answer":       result["answer"],
+                    "latency":      result["latency"],
+                    "steps_count":  result["steps_count"],
+                    "article_ids":  result["article_ids"],
+                    "observations": result.get("observations", []),
+                    "context":      result.get("context", ""),
+                    "metrics": {
+                        "h1": h1, "h5": h5, "rr": rr,
+                        "rl": rl, "kw_score": kw_score,
+                        "judge_score": judge_score,
+                        "faith": faith, "ar": ar,
+                        "pairwise_verdict": pairwise_v,
+                    },
+                }, ensure_ascii=False) + "\n")
+
+        # ── Unified accumulation ──────────────────────────────
+        tool_used  = result["tool_used"]
+        ag_answer  = result["answer"]
+        ag_results = result["article_ids"]
 
         latencies.append(result["latency"])
         step_counts.append(result["steps_count"])
@@ -583,11 +724,7 @@ def evaluate(test_set_path: Path = TEST_SET_FILE):
         all_references.append(ref_answer)
         all_results.append(result)
 
-        # Retrieval metrics — chỉ tính khi có article_id hợp lệ
-        if can_eval_ret:
-            h1 = hit_at_k(ag_results, article_id, 1)
-            h5 = hit_at_k(ag_results, article_id, 5)
-            rr = reciprocal_rank(ag_results, article_id)
+        if can_eval_ret and h1 is not None:
             ag_h1  += h1
             ag_h5  += h5
             ag_mrr += rr
@@ -599,15 +736,9 @@ def evaluate(test_set_path: Path = TEST_SET_FILE):
             cat_stats[category]["h1"]                += h1
             cat_stats[category]["mrr"]               += rr
             cat_stats[category]["retrieval_count"]   += 1
-        else:
-            h1 = h5 = rr = None
 
-        # Answer quality metrics — tính cho tất cả
-        rl       = rouge_l(ag_answer, ref_answer)
-        kw_score = keyword_accuracy(ag_answer, kw_list)
-        ag_rl   += rl
-        ag_kw   += kw_score
-
+        ag_rl  += rl
+        ag_kw  += kw_score
         tool_stats[tool_used]["rl"]    += rl
         tool_stats[tool_used]["kw"]    += kw_score
         tool_stats[tool_used]["count"] += 1
@@ -615,8 +746,6 @@ def evaluate(test_set_path: Path = TEST_SET_FILE):
         cat_stats[category]["kw"]      += kw_score
         cat_stats[category]["count"]   += 1
 
-        # LLM-as-Judge
-        judge_score = llm_judge(question, ref_answer, ag_answer)
         if judge_score is not None:
             judge_scores.append(judge_score)
             tool_stats[tool_used]["judge_sum"] += judge_score
@@ -624,30 +753,19 @@ def evaluate(test_set_path: Path = TEST_SET_FILE):
             cat_stats[category]["judge_sum"]   += judge_score
             cat_stats[category]["judge_n"]     += 1
 
-        # Faithfulness
-        q_context = result.get("context", "")
-        faith = faithfulness_score(ag_answer, q_context)
         if faith is not None:
             faith_scores.append(faith)
-
-        # Answer relevancy
-        ar = answer_relevancy_score(question, ag_answer)
         if ar is not None:
             ar_scores.append(ar)
 
-        # Pairwise: agent vs BM25
-        if bm25_available and ag_answer:
-            bm25_ans = bm25_answer(bm25, bm25_articles, question, top_k=3)
-            if bm25_ans:
-                verdict = pairwise_judge(question, ag_answer, bm25_ans)
-                if verdict == "A":
-                    pairwise_wins  += 1
-                    pairwise_total += 1
-                elif verdict == "B":
-                    pairwise_total += 1
-                elif verdict == "Tie":
-                    pairwise_ties  += 1
-                    pairwise_total += 1
+        if pairwise_v == "A":
+            pairwise_wins  += 1
+            pairwise_total += 1
+        elif pairwise_v == "B":
+            pairwise_total += 1
+        elif pairwise_v == "Tie":
+            pairwise_ties  += 1
+            pairwise_total += 1
 
         h1_str = f"{h1:.0f}" if h1 is not None else "N/A"
         rr_str = f"{rr:.2f}" if rr is not None else "N/A"
@@ -859,6 +977,22 @@ if __name__ == "__main__":
         "--annotation-n", type=int, default=30,
         help="Number of questions for annotation template (default: 30)"
     )
+    parser.add_argument(
+        "--resume", action="store_true",
+        help=(
+            "Resume from checkpoint (data/eval_checkpoint.jsonl), "
+            "skipping questions that already have a valid answer. "
+            "Without --resume, any existing checkpoint is cleared."
+        ),
+    )
+    parser.add_argument(
+        "--skip-expected-tool", default=None, metavar="TOOL",
+        help=(
+            "Skip questions where expected_tool == TOOL (e.g. CYPHER). "
+            "Use for pass-1 checkpoint build: run all non-CYPHER questions first, "
+            "then --resume to run only CYPHER with the routing fix."
+        ),
+    )
     args = parser.parse_args()
 
     if args.generate_annotation:
@@ -866,4 +1000,8 @@ if __name__ == "__main__":
         out = Path("data/human_annotation_template.json")
         generate_annotation_template(test_set, out, n=args.annotation_n)
     else:
-        evaluate(test_set_path=args.test_set)
+        evaluate(
+            test_set_path=args.test_set,
+            resume=args.resume,
+            skip_expected_tool=args.skip_expected_tool,
+        )

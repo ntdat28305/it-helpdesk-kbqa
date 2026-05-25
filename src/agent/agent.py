@@ -40,7 +40,7 @@ REFLEXION_MEMORY_FILE = Path("data/reflexion_memory.jsonl")
 
 # ── Regex patterns for pre-routing ────────────────────────────
 _RE_ERROR_CODE = re.compile(
-    r'\b(0x[0-9A-Fa-f]+|ERROR_\w+|KB\d{6,7}|HRESULT\b)',
+    r'\b(0x[0-9A-Fa-f]+|ERROR_\w+|KB\d{6,7}|HRESULT\b|AADSTS\d{5,})',
     re.IGNORECASE,
 )
 _RE_WEBSEARCH = re.compile(
@@ -89,6 +89,7 @@ TOOL SELECTION — apply the FIRST matching rule:
    - Named errors: ERROR_INVALID_HANDLE, ERROR_ACCESS_DENIED
    - KB articles: KB5034441, KB123456
    - HRESULT codes
+   - AADSTS codes: AADSTS50020, AADSTS700082, AADSTS65001
    DO NOT use for product names alone (Intune, Teams, Azure AD, Windows).
 
 2. bfs_search — ONLY when question asks the relationship between TWO named entities:
@@ -115,6 +116,7 @@ Examples:
 - "Auto MDM Enroll Failed (0x80180031)" → cypher_search
 - "ERROR_INVALID_HANDLE when opening app" → cypher_search
 - "KB5034441 fails to install" → cypher_search
+- "AADSTS50020: User account from identity provider does not exist" → cypher_search
 - "Windows 11 24H2 BSOD latest patch" → web_search
 - "What causes Teams to fail when VPN is on?" → bfs_search
 
@@ -133,7 +135,7 @@ TOOLS = [
             "name": "cypher_search",
             "description": (
                 "Search the IT knowledge graph for a specific entity, error code, or product. "
-                "ONLY use for explicit error codes (0x..., ERROR_XXX, KB numbers, HRESULT) "
+                "ONLY use for explicit error codes (0x..., ERROR_XXX, KB numbers, HRESULT, AADSTS codes) "
                 "or exact component names paired with an error code. "
                 "Do NOT use for product names alone (e.g. 'Intune', 'Teams', 'Azure AD') "
                 "without an accompanying error code."
@@ -260,14 +262,19 @@ _TOOL_NAME_MAP = {
 }
 
 
+# ── API key pool ─────────────────────────────────────────────
+
+_GROQ_KEYS = [k for k in [os.getenv(f"GROQ_API_KEY_{i}") for i in range(1, 6)] if k]
+
+
 # ── Model rotation ────────────────────────────────────────────
 
 _MODEL_FAST   = "llama-3.1-8b-instant"
-_MODEL_STRONG = "meta-llama/llama-4-scout-17b-16e-instruct"  # 500K TPD
+_MODEL_STRONG = "llama-3.3-70b-versatile"  # 100K TPD, stable function calling
 
 _MODEL_FALLBACK_CHAIN = [
-    "meta-llama/llama-4-scout-17b-16e-instruct",  # primary — 500K TPD
-    "llama-3.3-70b-versatile",                     # fallback 1 — 100K TPD
+    "llama-3.3-70b-versatile",                     # primary — 100K TPD, stable
+    "meta-llama/llama-4-scout-17b-16e-instruct",  # fallback 1 — 500K TPD
     "llama-3.1-8b-instant",                        # fallback 2 — 500K TPD
 ]
 
@@ -544,10 +551,20 @@ def global_search(question: str, resources: dict, top_k: int = 3) -> str:
 
 class ITHelpdeskAgent:
     def __init__(self):
-        self.client    = Groq(api_key=os.getenv("GROQ_API_KEY_1"))
+        self._key_idx  = 0
+        self.client    = Groq(api_key=_GROQ_KEYS[0] if _GROQ_KEYS else os.getenv("GROQ_API_KEY_1"))
         self.resources = load_resources()
         self.history: list[dict] = []
         logger.info("Agent initialized")
+
+    def _rotate_key(self) -> bool:
+        """Switch to the next API key. Returns True if rotation succeeded."""
+        if self._key_idx < len(_GROQ_KEYS) - 1:
+            self._key_idx += 1
+            self.client = Groq(api_key=_GROQ_KEYS[self._key_idx])
+            logger.warning(f"Rate limit — rotated to GROQ_API_KEY_{self._key_idx + 1}")
+            return True
+        return False
 
     def reset_history(self):
         self.history = []
@@ -747,37 +764,40 @@ class ITHelpdeskAgent:
                 else "auto"
             )
 
-            # ── LLM call với auto-retry khi rate limit ────────
+            # ── LLM call: loop qua tất cả keys rồi mới rotate model ─
             resp = None
-            try:
-                resp = self.client.chat.completions.create(
-                    model=get_strong_model(),
-                    messages=messages,
-                    tools=TOOLS,
-                    tool_choice=tool_choice,
-                    parallel_tool_calls=False,
-                    temperature=0,
-                    max_tokens=768,
-                )
-            except Exception as e:
-                logger.error(f"LLM call failed at step {step + 1}: {e}")
-                if rotate_model_on_rate_limit(str(e)):
-                    # Retry 1 lần với model mới sau khi rotate
-                    try:
-                        resp = self.client.chat.completions.create(
-                            model=get_strong_model(),
-                            messages=messages,
-                            tools=TOOLS,
-                            tool_choice=tool_choice,
-                            parallel_tool_calls=False,
-                            temperature=0,
-                            max_tokens=768,
-                        )
-                        logger.info(f"Retry succeeded with model: {get_strong_model()}")
-                    except Exception as e2:
-                        logger.error(f"Retry also failed: {e2}")
-                        break
-                else:
+            _call_kwargs = dict(
+                model=get_strong_model(),
+                messages=messages,
+                tools=TOOLS,
+                tool_choice=tool_choice,
+                parallel_tool_calls=False,
+                temperature=0,
+                max_tokens=768,
+            )
+            # Số lần thử = (số keys × số models còn lại trong chain)
+            _max_attempts = len(_GROQ_KEYS) * len(_MODEL_FALLBACK_CHAIN)
+            for _attempt in range(_max_attempts):
+                try:
+                    _call_kwargs["model"] = get_strong_model()
+                    resp = self.client.chat.completions.create(**_call_kwargs)
+                    logger.info(f"LLM OK: key={self._key_idx + 1} model={get_strong_model()}")
+                    break
+                except Exception as e:
+                    err = str(e)
+                    logger.error(f"LLM attempt {_attempt + 1} failed: {err[:120]}")
+                    if "429" not in err and "rate_limit" not in err.lower():
+                        break  # non-rate-limit error, không retry
+                    # Thử key tiếp theo trước
+                    if self._rotate_key():
+                        continue
+                    # Hết keys → rotate model, reset về key đầu
+                    if rotate_model_on_rate_limit(err):
+                        self._key_idx = 0
+                        self.client = Groq(api_key=_GROQ_KEYS[0])
+                        logger.warning(f"All keys exhausted, rotated model to {get_strong_model()}, reset to key 1")
+                        continue
+                    logger.error("All keys and models exhausted")
                     break
 
             if resp is None:
