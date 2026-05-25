@@ -97,6 +97,10 @@ def test_load_resources_loads_sem_emb_independently_of_retriever():
             m.exists.return_value = False
         return m
 
+    # Use the currently-active stub (may have been overwritten by another test module)
+    active_st = sys.modules["sentence_transformers"]
+    active_st.SentenceTransformer.reset_mock()
+
     with patch.object(ag, "Path", side_effect=fake_path):
         with patch("numpy.load", return_value=dummy_arr):
             resources = ag.load_resources()
@@ -106,7 +110,7 @@ def test_load_resources_loads_sem_emb_independently_of_retriever():
     # base_encoder should be loaded (retriever absent)
     assert "base_encoder" in resources or "retriever" in resources
     # SentenceTransformer called with base model
-    calls_str = str(_st_mock.SentenceTransformer.call_args_list)
+    calls_str = str(active_st.SentenceTransformer.call_args_list)
     assert "all-MiniLM-L6-v2" in calls_str
 
 # ─────────────────────────────────────────────────────────────
