@@ -10,6 +10,7 @@ Chạy thử:
 """
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import re
@@ -34,6 +35,7 @@ logger = get_logger(__name__, log_file="logs/agent.log")
 MAX_STEPS = 4
 EMBEDDING_FUZZY_THRESHOLD = 55
 MAX_HISTORY_MESSAGES = 40
+REFLEXION_MEMORY_FILE = Path("data/reflexion_memory.jsonl")
 
 # ── Regex patterns for pre-routing ────────────────────────────
 _RE_ERROR_CODE = re.compile(
@@ -365,6 +367,50 @@ def load_resources() -> dict:
     return resources
 
 
+# ── Reflexion memory ──────────────────────────────────────────
+
+def save_reflection_lesson(question: str, tool_used: str, reason: str) -> None:
+    """Persist a low-confidence lesson to reflexion memory file."""
+    entry = {
+        "question":  question,
+        "tool_used": tool_used,
+        "lesson":    reason,
+        "ts":        datetime.datetime.utcnow().isoformat(),
+    }
+    try:
+        with open(REFLEXION_MEMORY_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        logger.info(f"Saved reflexion lesson: {reason[:60]}")
+    except Exception as e:
+        logger.warning(f"Could not save reflexion lesson: {e}")
+
+
+def load_reflection_lessons(
+    question: str, resources: dict, top_k: int = 3
+) -> list[str]:
+    """Return top-k lessons relevant to the current question."""
+    if not REFLEXION_MEMORY_FILE.exists():
+        return []
+    try:
+        lines   = REFLEXION_MEMORY_FILE.read_text(encoding="utf-8").strip().splitlines()
+        entries = [json.loads(l) for l in lines if l.strip()]
+    except Exception:
+        return []
+    if not entries:
+        return []
+
+    retriever = resources.get("retriever")
+    if retriever is None:
+        return [e["lesson"] for e in entries[-top_k:]]
+
+    q_vec     = retriever.encode(question, normalize_embeddings=True)
+    past_qs   = [e["question"] for e in entries]
+    past_vecs = retriever.encode(past_qs, normalize_embeddings=True, show_progress_bar=False)
+    scores    = past_vecs @ q_vec
+    top_ids   = np.argsort(scores)[::-1][:top_k]
+    return [entries[i]["lesson"] for i in top_ids if scores[i] > 0.30]
+
+
 # ── Groq plain LLM call ───────────────────────────────────────
 
 def llm_call(
@@ -666,6 +712,14 @@ class ITHelpdeskAgent:
             if _plan_note
             else SYSTEM_PROMPT
         )
+
+        # Inject relevant reflexion lessons
+        _lessons = load_reflection_lessons(question, self.resources)
+        if _lessons:
+            _lesson_block = "Past lessons from similar questions: " + "; ".join(_lessons)
+            system_content = system_content + f"\n\n[{_lesson_block}]"
+            logger.info(f"Injected {len(_lessons)} reflexion lesson(s)")
+
         messages: list[dict] = [
             {"role": "system", "content": system_content},
             *history_context,
@@ -917,6 +971,9 @@ class ITHelpdeskAgent:
         )
         final_confidence = reflection["confidence"]
         final_reason     = reflection["reason"]
+
+        if reflection["confidence"] == "low":
+            save_reflection_lesson(question, result["tool_used"], reflection["reason"])
 
         if not reflection["is_sufficient"] and result.get("observations"):
             synthesis = "\n\n---\n\n".join(result["observations"])

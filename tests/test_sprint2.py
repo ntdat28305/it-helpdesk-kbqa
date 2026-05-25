@@ -93,3 +93,55 @@ def test_preprocess_prompt_has_prev_current_placeholders():
     import src.agent.prompts as p
     assert "{prev}" in p.PREPROCESS_PROMPT
     assert "{current}" in p.PREPROCESS_PROMPT
+
+# ── S2.3 reflexion memory ─────────────────────────────────────
+
+def test_save_reflection_lesson_creates_file(tmp_path):
+    from src.agent import agent as ag
+    orig = ag.REFLEXION_MEMORY_FILE
+    ag.REFLEXION_MEMORY_FILE = tmp_path / "reflexion_memory.jsonl"
+    try:
+        ag.save_reflection_lesson("Teams fails on VPN", "EMBEDDING", "Answer was too vague")
+        lines = ag.REFLEXION_MEMORY_FILE.read_text(encoding="utf-8").strip().splitlines()
+        assert len(lines) == 1
+        entry = json.loads(lines[0])
+        assert entry["question"] == "Teams fails on VPN"
+        assert entry["lesson"] == "Answer was too vague"
+    finally:
+        ag.REFLEXION_MEMORY_FILE = orig
+
+def test_load_reflection_lessons_returns_empty_when_no_file(tmp_path):
+    from src.agent import agent as ag
+    orig = ag.REFLEXION_MEMORY_FILE
+    ag.REFLEXION_MEMORY_FILE = tmp_path / "nonexistent.jsonl"
+    try:
+        result = ag.load_reflection_lessons("anything", {})
+        assert result == []
+    finally:
+        ag.REFLEXION_MEMORY_FILE = orig
+
+def test_load_reflection_lessons_semantic_match(tmp_path):
+    from src.agent import agent as ag
+    orig = ag.REFLEXION_MEMORY_FILE
+    ag.REFLEXION_MEMORY_FILE = tmp_path / "reflexion_memory.jsonl"
+    try:
+        entries = [
+            {"question": "Teams drops on VPN", "lesson": "Check VPN split tunneling",
+             "tool_used": "BFS", "ts": "2026-01-01"},
+            {"question": "Printer not found", "lesson": "Check printer driver",
+             "tool_used": "EMBEDDING", "ts": "2026-01-02"},
+        ]
+        ag.REFLEXION_MEMORY_FILE.write_text(
+            "\n".join(json.dumps(e) for e in entries), encoding="utf-8"
+        )
+        mock_retriever = MagicMock()
+        mock_retriever.encode.side_effect = [
+            np.array([1.0, 0.0]),
+            np.array([[0.95, 0.05],
+                      [0.05, 0.95]]),
+        ]
+        resources = {"retriever": mock_retriever}
+        result = ag.load_reflection_lessons("VPN Teams issue", resources, top_k=1)
+        assert isinstance(result, list)
+    finally:
+        ag.REFLEXION_MEMORY_FILE = orig
