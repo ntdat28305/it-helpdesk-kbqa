@@ -293,25 +293,31 @@ def load_resources() -> dict:
     sem_path       = Path("models/embeddings/node_semantic_embeddings.npy")
     retriever_path = Path("models/retriever")
 
-    if sem_path.exists():
+    if sem_path.exists() or retriever_path.exists():
         from sentence_transformers import SentenceTransformer as _ST
-        resources["node_semantic_emb"] = np.load(sem_path)
-        logger.info(
-            f"Loaded node_semantic_emb: shape={resources['node_semantic_emb'].shape}"
-        )
 
-    if retriever_path.exists():
-        from sentence_transformers import SentenceTransformer as _ST
-        resources["retriever"] = _ST(str(retriever_path))
-        logger.info(f"Loaded finetuned retriever: {retriever_path}")
-    elif sem_path.exists():
-        from sentence_transformers import SentenceTransformer as _ST
-        resources["base_encoder"] = _ST("all-MiniLM-L6-v2")
-        logger.info("Loaded base encoder: all-MiniLM-L6-v2 (no finetuned retriever)")
+        if sem_path.exists():
+            resources["node_semantic_emb"] = np.load(sem_path)
+            logger.info(
+                f"Loaded node_semantic_emb: shape={resources['node_semantic_emb'].shape}"
+            )
+
+        if retriever_path.exists():
+            resources["retriever"] = _ST(str(retriever_path))
+            logger.info(f"Loaded finetuned retriever: {retriever_path}")
+        elif sem_path.exists():
+            resources["base_encoder"] = _ST("all-MiniLM-L6-v2")
+            logger.info("Loaded base encoder: all-MiniLM-L6-v2 (no finetuned retriever)")
     else:
         logger.warning(
             "node_semantic_embeddings.npy not found -- fallback to fuzzy match. "
             "Run train_gcn.py to generate semantic embeddings."
+        )
+
+    if "retriever" in resources and "node_semantic_emb" not in resources:
+        logger.warning(
+            "Finetuned retriever loaded but node_semantic_embeddings.npy not found -- "
+            "retriever will be unused. Run train_gcn.py to generate semantic embeddings."
         )
 
     return resources
