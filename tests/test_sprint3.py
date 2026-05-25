@@ -144,3 +144,17 @@ def test_generate_annotation_template_produces_correct_structure(tmp_path):
     assert all("human_score" in r for r in data)
     assert all(r["human_score"] is None for r in data)
     assert all("human_notes" in r for r in data)
+
+# ── S3.5 KW primary metric ────────────────────────────────────
+
+def test_keyword_accuracy_listed_before_rouge_in_results_schema():
+    """keyword_accuracy should appear before rouge_l in the saved agent dict."""
+    import scripts.evaluate as ev
+    import inspect
+    source = inspect.getsource(ev.evaluate)
+    kw_pos    = source.find('"keyword_accuracy"')
+    rouge_pos = source.find('"rouge_l"')
+    assert kw_pos < rouge_pos, (
+        f"keyword_accuracy (pos {kw_pos}) should come before rouge_l (pos {rouge_pos}) "
+        "in the results dict — KW is primary metric"
+    )

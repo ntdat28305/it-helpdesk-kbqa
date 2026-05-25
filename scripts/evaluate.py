@@ -707,8 +707,8 @@ def evaluate(test_set_path: Path = TEST_SET_FILE):
         print("  → Fill 'matched_article_id' in test set to enable Hit@K/MRR")
 
     print(f"\n--- Answer Quality (all {n} questions) ---")
+    print(f"  {'Keyword Accuracy':<20} {ag_kw/n:.3f}  ← primary metric")
     print(f"  {'ROUGE-L':<20} {ag_rl/n:.3f}")
-    print(f"  {'Keyword Accuracy':<20} {ag_kw/n:.3f}")
     bert_str  = f"{bert_f1:.3f}" if bert_f1 is not None else "N/A (not installed)"
     judge_str = f"{judge_avg:.2f}/5.0  (n={judge_n}/{n} valid)" if judge_avg is not None else "N/A"
     print(f"  {'BERT-Score F1':<20} {bert_str}")
@@ -788,8 +788,8 @@ def evaluate(test_set_path: Path = TEST_SET_FILE):
             "hit@1":              round(ag_h1/denom_ret,  3) if n_retrieval_done else None,
             "hit@5":              round(ag_h5/denom_ret,  3) if n_retrieval_done else None,
             "mrr":                round(ag_mrr/denom_ret, 3) if n_retrieval_done else None,
-            "rouge_l":            round(ag_rl/n,  3),
             "keyword_accuracy":   round(ag_kw/n,  3),
+            "rouge_l":            round(ag_rl/n,  3),
             "bert_score_f1":      round(bert_f1, 3) if bert_f1 is not None else None,
             "llm_judge_avg":      round(judge_avg, 3) if judge_avg is not None else None,
             "llm_judge_n_valid":  judge_n,
