@@ -93,6 +93,19 @@ def bm25_search(bm25, articles: list[dict], query: str, top_k: int = 5) -> list[
     return [articles[i]["article_id"] for i in top_ids]
 
 
+def bm25_answer(bm25, articles: list[dict], query: str, top_k: int = 3) -> str:
+    """Generate a BM25 baseline 'answer' by concatenating top-k article excerpts."""
+    tokens  = _tokenize(query)
+    scores  = bm25.get_scores(tokens)
+    top_ids = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+    parts   = []
+    for idx in top_ids:
+        art     = articles[idx]
+        snippet = art["text"][:200].replace("\n", " ")
+        parts.append(f"{art['title']}: {snippet}")
+    return "\n".join(parts) if parts else ""
+
+
 # ── Agent ─────────────────────────────────────────────────────
 
 def agent_search(
@@ -300,6 +313,56 @@ def answer_relevancy_score(question: str, answer: str) -> float | None:
         return None
 
 
+PAIRWISE_PROMPT = """\
+You are an expert IT support evaluator comparing two answers to an IT helpdesk question.
+
+Question: {question}
+
+Answer A: {answer_a}
+
+Answer B: {answer_b}
+
+Which answer better addresses the IT question? Consider: accuracy, completeness, actionability, specificity.
+Reply ONLY with exactly one of: A, B, or Tie"""
+
+
+def pairwise_judge(
+    question: str, answer_a: str, answer_b: str
+) -> str | None:
+    """Returns 'A', 'B', or 'Tie'. None if either answer is missing.
+
+    Randomizes answer order to counteract LLM position bias.
+    """
+    if not answer_a or not answer_b:
+        return None
+    import random
+    flipped = random.random() < 0.5
+    a_sent  = answer_b if flipped else answer_a
+    b_sent  = answer_a if flipped else answer_b
+    try:
+        client = _get_groq_client()
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": PAIRWISE_PROMPT.format(
+                question=question,
+                answer_a=a_sent[:500],
+                answer_b=b_sent[:500],
+            )}],
+            temperature=0,
+            max_tokens=10,
+        )
+        verdict = resp.choices[0].message.content.strip()
+        if "Tie" in verdict or "tie" in verdict:
+            return "Tie"
+        if verdict.startswith("A"):
+            return "B" if flipped else "A"
+        if verdict.startswith("B"):
+            return "A" if flipped else "B"
+        return None
+    except Exception:
+        return None
+
+
 def llm_judge(question: str, reference: str, agent_answer: str) -> int | None:
     """Score agent answer 1-5 using Groq."""
     if not agent_answer or not reference:
@@ -415,6 +478,11 @@ def evaluate(test_set_path: Path = TEST_SET_FILE):
     all_predictions: list[str]   = []
     all_references:  list[str]   = []
     all_results:     list[dict]  = []
+    faith_scores:   list[float] = []
+    ar_scores:      list[float] = []
+    pairwise_wins   = 0
+    pairwise_ties   = 0
+    pairwise_total  = 0
 
     tool_stats: dict[str, dict] = defaultdict(
         lambda: {"h1": 0.0, "h5": 0.0, "mrr": 0.0, "rl": 0.0, "kw": 0.0,
@@ -506,6 +574,31 @@ def evaluate(test_set_path: Path = TEST_SET_FILE):
             cat_stats[category]["judge_sum"]   += judge_score
             cat_stats[category]["judge_n"]     += 1
 
+        # Faithfulness
+        q_context = result.get("context", "")
+        faith = faithfulness_score(ag_answer, q_context)
+        if faith is not None:
+            faith_scores.append(faith)
+
+        # Answer relevancy
+        ar = answer_relevancy_score(question, ag_answer)
+        if ar is not None:
+            ar_scores.append(ar)
+
+        # Pairwise: agent vs BM25
+        if bm25_available and ag_answer:
+            bm25_ans = bm25_answer(bm25, bm25_articles, question, top_k=3)
+            if bm25_ans:
+                verdict = pairwise_judge(question, ag_answer, bm25_ans)
+                if verdict == "A":
+                    pairwise_wins  += 1
+                    pairwise_total += 1
+                elif verdict == "B":
+                    pairwise_total += 1
+                elif verdict == "Tie":
+                    pairwise_ties  += 1
+                    pairwise_total += 1
+
         h1_str = f"{h1:.0f}" if h1 is not None else "N/A"
         rr_str = f"{rr:.2f}" if rr is not None else "N/A"
         j_str  = str(judge_score) if judge_score is not None else "N/A"
@@ -570,6 +663,17 @@ def evaluate(test_set_path: Path = TEST_SET_FILE):
     judge_str = f"{judge_avg:.2f}/5.0  (n={judge_n}/{n} valid)" if judge_avg is not None else "N/A"
     print(f"  {'BERT-Score F1':<20} {bert_str}")
     print(f"  {'LLM-Judge avg':<20} {judge_str}")
+    faith_str = f"{sum(faith_scores)/len(faith_scores):.3f}  (n={len(faith_scores)})" if faith_scores else "N/A"
+    ar_str    = f"{sum(ar_scores)/len(ar_scores):.3f}  (n={len(ar_scores)})" if ar_scores else "N/A"
+    print(f"  {'Faithfulness':<20} {faith_str}")
+    print(f"  {'Answer Relevancy':<20} {ar_str}")
+    if pairwise_total > 0:
+        pairwise_losses = pairwise_total - pairwise_wins - pairwise_ties
+        win_rate = pairwise_wins / pairwise_total
+        print(f"\n--- Pairwise: Agent vs BM25 (n={pairwise_total}) ---")
+        print(f"  Agent wins:   {pairwise_wins}  ({win_rate:.1%})")
+        print(f"  Ties:         {pairwise_ties}")
+        print(f"  BM25 wins:    {pairwise_losses}")
 
     print(f"\n--- Agent Quality ---")
     if tool_acc["total"] > 0:
@@ -646,6 +750,12 @@ def evaluate(test_set_path: Path = TEST_SET_FILE):
             "latency_avg":        round(lat_avg, 3),
             "avg_steps":          round(avg_steps, 2),
             "max_steps":          max_steps,
+            "faithfulness":       round(sum(faith_scores)/len(faith_scores), 3) if faith_scores else None,
+            "answer_relevancy":   round(sum(ar_scores)/len(ar_scores), 3) if ar_scores else None,
+            "pairwise_win_rate":  round(pairwise_wins/pairwise_total, 3) if pairwise_total else None,
+            "pairwise_wins":      pairwise_wins,
+            "pairwise_ties":      pairwise_ties,
+            "pairwise_total":     pairwise_total,
         },
         "bm25": {
             "hit@1": round(bm25_h1/denom_ret,  3),

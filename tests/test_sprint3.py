@@ -80,3 +80,46 @@ def test_answer_relevancy_returns_none_when_empty_answer():
     import scripts.evaluate as ev
     score = ev.answer_relevancy_score(question="any question", answer="")
     assert score is None
+
+
+# ── S3.3 Pairwise eval ────────────────────────────────────────
+
+def test_pairwise_prompt_exists():
+    import scripts.evaluate as ev
+    assert hasattr(ev, "PAIRWISE_PROMPT")
+    assert "{answer_a}" in ev.PAIRWISE_PROMPT
+    assert "{answer_b}" in ev.PAIRWISE_PROMPT
+    assert "{question}" in ev.PAIRWISE_PROMPT
+
+def test_pairwise_judge_returns_valid_winner():
+    import scripts.evaluate as ev
+
+    mock_client = MagicMock()
+    mock_resp   = MagicMock()
+    mock_resp.choices[0].message.content = "A"
+    mock_client.chat.completions.create.return_value = mock_resp
+
+    with patch.object(ev, "_get_groq_client", return_value=mock_client):
+        winner = ev.pairwise_judge(
+            question="How do I fix Teams audio?",
+            answer_a="Check your audio drivers and re-enroll device.",
+            answer_b="Microsoft Teams audio issue.",
+        )
+    assert winner in ("A", "B", "Tie"), f"Expected A/B/Tie, got {winner!r}"
+
+def test_pairwise_judge_returns_tie():
+    import scripts.evaluate as ev
+
+    mock_client = MagicMock()
+    mock_resp   = MagicMock()
+    mock_resp.choices[0].message.content = "Tie"
+    mock_client.chat.completions.create.return_value = mock_resp
+
+    with patch.object(ev, "_get_groq_client", return_value=mock_client):
+        winner = ev.pairwise_judge("question", "answer a", "answer b")
+    assert winner in ("A", "B", "Tie")
+
+def test_pairwise_judge_returns_none_on_missing_answers():
+    import scripts.evaluate as ev
+    result = ev.pairwise_judge("q", "", "answer b")
+    assert result is None
