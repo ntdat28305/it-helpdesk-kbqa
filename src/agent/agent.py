@@ -343,9 +343,13 @@ def load_resources() -> dict:
                 f"Loaded node_semantic_emb: shape={resources['node_semantic_emb'].shape}"
             )
 
-        if retriever_path.exists():
+        _has_weights = (retriever_path / "model.safetensors").exists() or \
+                       (retriever_path / "pytorch_model.bin").exists()
+        if retriever_path.exists() and _has_weights:
             resources["retriever"] = _ST(str(retriever_path))
             logger.info(f"Loaded finetuned retriever: {retriever_path}")
+        elif retriever_path.exists():
+            logger.warning("models/retriever found but no weights (model.safetensors) -- skipping finetuned retriever")
         elif sem_path.exists():
             resources["base_encoder"] = _ST("all-MiniLM-L6-v2")
             logger.info("Loaded base encoder: all-MiniLM-L6-v2 (no finetuned retriever)")
