@@ -272,6 +272,38 @@ When `models/retriever/` exists, the agent uses semantic (cosine) matching for e
 
 ---
 
+## Training the GCN Model
+
+After completing Data Pipeline stages ①–④, train the Graph Autoencoder to produce node embeddings used by the EMBEDDING tool:
+
+```bash
+# Step 1: Run community detection + summaries
+python -m src.kg_build.community
+python -m src.kg_build.summarizer
+
+# Step 2: Train Graph Autoencoder
+python -m src.embedding.train_gcn
+```
+
+**Outputs:**
+
+| File | Description |
+|---|---|
+| `models/embeddings/node_embeddings.npy` | 32-dim L2-normalised node vectors |
+| `models/embeddings/idx_to_name.json` | Index → entity name mapping |
+| `models/embeddings/name_to_idx.json` | Entity name → index mapping |
+| `models/gcn_checkpoint/` | Best-epoch model weights |
+
+**Hyperparameters:** `hidden_dim=64`, `output_dim=32`, `dropout=0.3`, `lr=1e-2` (Adam, weight decay `1e-4`), early stopping patience=20, seed=42.
+
+> **Optional:** Finetune the sentence-transformer retriever for improved entity recall:
+> ```bash
+> python scripts/generate_finetune_data.py
+> python scripts/finetune_retriever.py   # → models/retriever/
+> ```
+
+---
+
 ## Agent & ReAct Loop
 
 The core of the system is `ITHelpdeskAgent` in [src/agent/agent.py](src/agent/agent.py). Every query follows a fixed pipeline with **two Groq models** at different cost/speed tradeoffs:
@@ -599,12 +631,12 @@ docker-compose up --build
 
 ## Team
 
-| Role | Responsibilities |
-|---|---|
-| **Data & Infrastructure** | Web scraper, data pipeline, Docker deployment |
-| **Knowledge Graph** | Neo4j schema, graph loader, GCN training, Streamlit UI |
-| **Agent & LLM** | Entity extraction, ReAct agent, 4-tool integration, self-reflection |
-| **Evaluation & Report** | Test set generation, metrics, academic report & slides |
+| Name | Role | Responsibilities |
+|---|---|---|
+| **Nguyen Thanh Dat** | Agent & LLM | ReAct agent, dual-LLM strategy, 4-tool integration, self-reflection, evaluation pipeline, report |
+| **Nguyen Le Quang** | Knowledge Graph | Neo4j schema, graph loader, GCN training, community detection, Streamlit UI |
+| **Le Hai** | Data & Infrastructure | Web scraper, entity extraction pipeline, Docker deployment, Railway hosting |
+| **Ngo Quang Thang** | Evaluation & Report | Test set construction, BM25 baseline, RAGAS metrics, slides |
 
 ---
 
